@@ -9,6 +9,8 @@ mod comments;
 mod errors;
 #[path = "it/extras.rs"]
 mod extras;
+#[path = "it/fast_path_specific.rs"]
+mod fast_path_specific;
 #[path = "it/formulas.rs"]
 mod formulas;
 #[path = "it/hidden.rs"]
