@@ -14,7 +14,7 @@ use crate::{search_file, FileBlock};
 pub fn run_search(
     paths: Vec<PathBuf>,
     pattern: &Pattern,
-    reader_opts: &ReaderOptions,
+    reader_opts: &ReaderOptions<'_>,
     invert: bool,
     threads: usize,
 ) -> Vec<FileBlock> {

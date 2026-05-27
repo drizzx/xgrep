@@ -161,6 +161,8 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         layers,
         include_hidden: !cli.no_hidden,
         sheet_filter: sheet_glob.as_ref().map(|g| g.compile_matcher()),
+        pattern: None,
+        disable_fast_path: false,
     };
     let threads = if cli.threads == 0 {
         num_cpus().max(1)

@@ -39,6 +39,8 @@ fn sheet_glob_excludes_unmatched_sheets() {
         layers: xgrep::config::LayerSet::defaults(),
         include_hidden: true,
         sheet_filter: Some(Glob::new("汇总").unwrap().compile_matcher()),
+        pattern: None,
+        disable_fast_path: false,
     };
     let cells = read_cells(&path, &opts).unwrap();
     assert!(cells.iter().all(|c| c.sheet == "汇总"));
@@ -59,6 +61,8 @@ fn search_file_emits_file_block_with_matches() {
         layers: LayerSet::defaults(),
         include_hidden: true,
         sheet_filter: None,
+        pattern: None,
+        disable_fast_path: false,
     };
     let block: FileBlock = search_file(&path, &pat, &opts, false);
 
@@ -111,6 +115,8 @@ fn worker_runs_files_in_parallel_and_emits_one_block_per_file() {
         layers: LayerSet::defaults(),
         include_hidden: true,
         sheet_filter: None,
+        pattern: None,
+        disable_fast_path: false,
     };
     let blocks = run_search(paths.clone(), &pat, &opts, false, 4);
 

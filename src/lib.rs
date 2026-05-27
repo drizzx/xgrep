@@ -93,16 +93,17 @@ use std::collections::HashSet;
 pub fn search_file(
     path: &std::path::Path,
     pattern: &Pattern,
-    reader_opts: &ReaderOptions,
+    reader_opts: &ReaderOptions<'_>,
     invert: bool,
 ) -> FileBlock {
-    let mut events = vec![MatchEvent::FileBegin {
-        path: path.to_path_buf(),
-    }];
+    let mut enriched = reader_opts.clone();
+    enriched.pattern = Some(pattern);
+
+    let mut events = vec![MatchEvent::FileBegin { path: path.to_path_buf() }];
     let mut matches = 0u64;
     let mut sheets_seen: HashSet<String> = HashSet::new();
 
-    match read_cells(path, reader_opts) {
+    match read_cells(path, &enriched) {
         Ok(cells) => {
             for c in cells {
                 sheets_seen.insert(c.sheet.clone());

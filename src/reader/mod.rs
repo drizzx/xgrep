@@ -19,26 +19,32 @@ use crate::reader::cells::SheetParseInput;
 use crate::reader::zip_index::ZipIndex;
 
 #[derive(Debug, Clone)]
-pub struct ReaderOptions {
+pub struct ReaderOptions<'a> {
     pub layers: LayerSet,
     pub include_hidden: bool,
     pub sheet_filter: Option<globset::GlobMatcher>,
+    /// Pattern visible to the reader for fast-path decisions. When None, the
+    /// reader walks the full v0.1 path (no skip, no sst pre-scan).
+    pub pattern: Option<&'a crate::matcher::Pattern>,
+    /// True to bypass all fast-paths and walk the v0.1 path regardless of
+    /// `pattern`. Wired to `XGREP_DISABLE_FAST_PATH=1` in main.rs (Task 22).
+    pub disable_fast_path: bool,
 }
 
-impl ReaderOptions {
+impl<'a> ReaderOptions<'a> {
     pub fn defaults_for_v01() -> Self {
         Self {
             layers: LayerSet::defaults(),
             include_hidden: true,
             sheet_filter: None,
+            pattern: None,
+            disable_fast_path: false,
         }
     }
 }
 
-impl Default for ReaderOptions {
-    fn default() -> Self {
-        Self::defaults_for_v01()
-    }
+impl<'a> Default for ReaderOptions<'a> {
+    fn default() -> Self { Self::defaults_for_v01() }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +55,7 @@ pub struct CellRecord {
     pub text: String,
 }
 
-pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, SearchError> {
+pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellRecord>, SearchError> {
     // One ZipIndex per file — used by hidden + comments. Workbook (calamine) is
     // opened separately because calamine needs an owned file handle (it parses
     // the zip itself). This is fine: zip 2's File-based open is fast (no decompression
