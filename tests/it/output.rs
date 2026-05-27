@@ -74,3 +74,21 @@ fn pretty_output_layer_tag_omitted_for_display_unless_forced() {
     let s2 = String::from_utf8(buf2).unwrap();
     assert!(s2.contains("[display]"));
 }
+
+#[test]
+fn pretty_output_emits_ansi_when_color_always() {
+    let block = search_basic("张三");
+    let mut buf = Vec::new();
+    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Always, false).unwrap();
+    let out = String::from_utf8(buf).unwrap();
+    assert!(out.contains('\x1b'), "expected ANSI escape in colored output");
+}
+
+#[test]
+fn pretty_output_omits_ansi_when_color_never() {
+    let block = search_basic("张三");
+    let mut buf = Vec::new();
+    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Never, false).unwrap();
+    let out = String::from_utf8(buf).unwrap();
+    assert!(!out.contains('\x1b'));
+}
