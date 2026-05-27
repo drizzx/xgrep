@@ -15,3 +15,5 @@ mod formulas;
 mod hidden;
 #[path = "it/output.rs"]
 mod output;
+#[path = "it/sst.rs"]
+mod sst;

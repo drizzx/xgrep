@@ -5,6 +5,7 @@
 pub mod cells;
 pub mod comments;
 pub mod hidden;
+pub mod sst;
 pub mod zip_index;
 
 use std::collections::HashMap;
