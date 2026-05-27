@@ -70,3 +70,22 @@ fn search_file_emits_file_block_with_matches() {
     assert!(matches!(block.events.first(), Some(MatchEvent::FileBegin { .. })));
     assert!(matches!(block.events.last(), Some(MatchEvent::FileEnd { .. })));
 }
+
+#[test]
+fn walker_finds_xlsx_files_recursively_and_skips_others() {
+    use std::fs;
+    use xgrep::walker::walk_xlsx;
+
+    let dir = TempDir::new().unwrap();
+    let sub = dir.path().join("nested");
+    fs::create_dir_all(&sub).unwrap();
+    write_basic_xlsx(dir.path());
+    write_basic_xlsx(&sub);
+    fs::write(dir.path().join("note.txt"), "ignore me").unwrap();
+    fs::write(dir.path().join("data.csv"), "ignore,me").unwrap();
+
+    let mut found: Vec<_> = walk_xlsx(&[dir.path().to_path_buf()], None).unwrap();
+    found.sort();
+    assert_eq!(found.len(), 2);
+    assert!(found.iter().all(|p| p.extension().map(|e| e == "xlsx").unwrap_or(false)));
+}
