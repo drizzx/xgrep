@@ -4,6 +4,7 @@
 
 pub mod cells;
 pub mod comments;
+pub mod fast_path;
 pub mod hidden;
 pub mod sst;
 pub mod zip_index;

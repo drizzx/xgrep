@@ -16,6 +16,7 @@ pub enum CaseMode {
 pub struct Pattern {
     regex: Regex,
     raw: String,
+    case_insensitive: bool, // NEW
 }
 
 impl Pattern {
@@ -49,6 +50,7 @@ impl Pattern {
         Ok(Self {
             regex,
             raw: raw.to_owned(),
+            case_insensitive: insensitive,
         })
     }
 
@@ -63,6 +65,12 @@ impl Pattern {
 
     pub fn raw(&self) -> &str {
         &self.raw
+    }
+
+    /// True if the compiled regex was built with `case_insensitive(true)`.
+    /// Used by reader fast-paths that need to recompile a derived regex.
+    pub fn is_case_insensitive(&self) -> bool {
+        self.case_insensitive
     }
 }
 
