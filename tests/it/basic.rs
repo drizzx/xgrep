@@ -72,6 +72,36 @@ fn search_file_emits_file_block_with_matches() {
 }
 
 #[test]
+fn worker_runs_files_in_parallel_and_emits_one_block_per_file() {
+    use std::fs;
+    use xgrep::config::LayerSet;
+    use xgrep::matcher::{CaseMode, Pattern};
+    use xgrep::worker::run_search;
+
+    let dir = TempDir::new().unwrap();
+    let mut paths = Vec::new();
+    for i in 0..5 {
+        let sub = dir.path().join(format!("d{i}"));
+        fs::create_dir_all(&sub).unwrap();
+        paths.push(write_basic_xlsx(&sub));
+    }
+
+    let pat = Pattern::compile("张三", CaseMode::Smart, false, false).unwrap();
+    let opts = ReaderOptions {
+        layers: LayerSet::defaults(),
+        include_hidden: true,
+        sheet_filter: None,
+    };
+    let blocks = run_search(paths.clone(), &pat, &opts, false, 4);
+
+    assert_eq!(blocks.len(), paths.len());
+    for b in &blocks {
+        assert!(matches!(b.events.first(), Some(xgrep::MatchEvent::FileBegin { .. })));
+        assert!(matches!(b.events.last(), Some(xgrep::MatchEvent::FileEnd { .. })));
+    }
+}
+
+#[test]
 fn walker_finds_xlsx_files_recursively_and_skips_others() {
     use std::fs;
     use xgrep::walker::walk_xlsx;

@@ -6,6 +6,7 @@ pub mod error;
 pub mod matcher;
 pub mod reader;
 pub mod walker;
+pub mod worker;
 
 use std::path::PathBuf;
 use serde::Serialize;
