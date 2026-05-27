@@ -2,6 +2,7 @@
 //! (sheet, cell, layer) tuple matched by the configured `LayerSet` /
 //! `include_hidden` flags.
 
+pub mod comments;
 pub mod zip_index;
 
 use std::path::Path;
@@ -12,6 +13,7 @@ use chrono::Timelike as _;
 use crate::cell::to_a1;
 use crate::config::{Layer, LayerSet};
 use crate::error::SearchError;
+use crate::reader::zip_index::ZipIndex;
 
 #[derive(Debug, Clone)]
 pub struct ReaderOptions {
@@ -147,7 +149,11 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
             .filter(|m| matches!(m.visible, calamine::SheetVisible::Visible))
             .map(|m| m.name.clone())
             .collect();
-        let comments = extract_comments(path).unwrap_or_default();
+        let comments: Vec<(String, String, String)> = ZipIndex::open(path)
+            .ok()
+            .as_mut()
+            .map(|idx| comments::extract(idx).unwrap_or_default())
+            .unwrap_or_default();
         for (sheet, cell, text) in comments {
             if let Some(filter) = &opts.sheet_filter {
                 if !filter.is_match(&sheet) {
@@ -268,63 +274,6 @@ fn sheet_xml_paths(path: &std::path::Path) -> Result<Vec<(String, String)>, Sear
         .collect())
 }
 
-/// Read all cell comments by directly parsing xl/comments*.xml entries.
-/// Returns Vec<(sheet_name, cell_a1, text)>.
-fn extract_comments(path: &std::path::Path) -> Result<Vec<(String, String, String)>, SearchError> {
-    let file = std::fs::File::open(path).map_err(SearchError::Io)?;
-    let mut zip =
-        zip::ZipArchive::new(file).map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
-
-    let sheets = sheet_xml_paths(path)?;
-    let mut out = Vec::new();
-    let re_comment =
-        regex::Regex::new(r#"<comment[^>]*ref="([^"]+)"[^>]*>([\s\S]*?)</comment>"#).unwrap();
-    let re_t = regex::Regex::new(r#"<t[^>]*>([\s\S]*?)</t>"#).unwrap();
-    let re_comments_target = regex::Regex::new(r#"Target="([^"]*comments[^"]+\.xml)""#).unwrap();
-
-    for (sheet_name, sheet_xml) in sheets {
-        // sheet_xml is like "xl/worksheets/sheet1.xml" — its rels live at
-        // "xl/worksheets/_rels/sheet1.xml.rels"
-        let rels_path = sheet_xml.replacen("worksheets/", "worksheets/_rels/", 1) + ".rels";
-        let mut rels = String::new();
-        if let Ok(mut f) = zip.by_name(&rels_path) {
-            f.read_to_string(&mut rels)?;
-        } else {
-            continue;
-        }
-        let Some(cap) = re_comments_target.captures(&rels) else {
-            continue;
-        };
-        let target = cap[1].to_string();
-        // Targets like "../comments1.xml" → resolve to "xl/comments1.xml"
-        // Targets like "comments1.xml" → resolve to "xl/worksheets/comments1.xml"
-        let comments_path = if let Some(stripped) = target.strip_prefix("../") {
-            format!("xl/{stripped}")
-        } else {
-            format!("xl/worksheets/{target}")
-        };
-        let mut comments_xml = String::new();
-        if let Ok(mut f) = zip.by_name(&comments_path) {
-            f.read_to_string(&mut comments_xml)?;
-        } else {
-            continue;
-        }
-
-        for cap in re_comment.captures_iter(&comments_xml) {
-            let cell = cap[1].to_string();
-            let body = &cap[2];
-            let text: String = re_t
-                .captures_iter(body)
-                .map(|c| xml_unescape(&c[1]))
-                .collect::<Vec<_>>()
-                .join("");
-            if !text.is_empty() {
-                out.push((sheet_name.clone(), cell, text));
-            }
-        }
-    }
-    Ok(out)
-}
 
 fn hidden_row_col_for_sheet(
     path: &std::path::Path,
@@ -366,10 +315,3 @@ fn hidden_row_col_for_sheet(
     (hidden_rows, hidden_cols)
 }
 
-fn xml_unescape(s: &str) -> String {
-    s.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-}
