@@ -46,6 +46,78 @@ fn out_root() -> PathBuf {
     Path::new(manifest).join("..").join("target").join("bench-fixtures")
 }
 
+mod gen {
+    use anyhow::{Context, Result};
+    use rust_xlsxwriter::Workbook;
+    use std::path::Path;
+
+    use super::FixtureSpec;
+
+    /// Build a single .xlsx file at `out` from `spec`. Files-mode (`spec.files > 0`)
+    /// is handled by a separate path; this writes a single workbook.
+    pub fn write_single(spec: &FixtureSpec, out: &Path) -> Result<()> {
+        let mut wb = Workbook::new();
+        let sst_size = if spec.shared_strings > 0 {
+            spec.shared_strings
+        } else {
+            (spec.rows / 10).max(10)
+        };
+        // Pre-build the sst pool: each entry is "row-<idx>" by default; entries whose
+        // index falls within `hit_density * sst_size` start with "HIT-" to give bench
+        // patterns ("HIT") a controllable hit ratio.
+        let hit_cut = ((sst_size as f32) * spec.hit_density) as u32;
+        let sst_pool: Vec<String> = (0..sst_size)
+            .map(|i| {
+                if i < hit_cut {
+                    format!("HIT-row-{i}")
+                } else {
+                    format!("row-{i}")
+                }
+            })
+            .collect();
+
+        for s in 0..spec.sheets {
+            let sheet_name = format!("Sheet{}", s + 1);
+            let ws = wb
+                .add_worksheet()
+                .set_name(&sheet_name)
+                .with_context(|| format!("sheet name {sheet_name}"))?;
+            for r in 0..spec.rows {
+                // Column A: number (drives non-sst, non-inline-string scan path)
+                ws.write_number(r, 0, (r as f64) * 1.5)
+                    .with_context(|| format!("A{}", r + 1))?;
+                // Column B: shared-string-typed cell (rust_xlsxwriter dedups via write_string)
+                let s_idx = (r as usize) % sst_pool.len();
+                let s_text = &sst_pool[s_idx];
+                ws.write_string(r, 1, s_text)
+                    .with_context(|| format!("B{}", r + 1))?;
+                // Column C: optionally inline string (write_string_only bypasses sst when feature set)
+                if spec.inline_strings_pct > 0.0 {
+                    if ((r as f32) / (spec.rows as f32)) < spec.inline_strings_pct {
+                        ws.write_string(r, 2, &format!("inline-{r}"))
+                            .with_context(|| format!("C{}", r + 1))?;
+                    }
+                }
+                // Column D: optional formula
+                // Note: write_formula_with_result does not exist in rust_xlsxwriter 0.79.
+                // Use write_formula + set_formula_result instead.
+                if spec.formula_pct > 0.0 {
+                    if ((r as f32) / (spec.rows as f32)) < spec.formula_pct {
+                        ws.write_formula(r, 3, "=A1+B1")
+                            .with_context(|| format!("D{}", r + 1))?;
+                        ws.set_formula_result(r, 3, &format!("{:.1}", (r as f64) * 2.5));
+                    }
+                }
+            }
+        }
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        wb.save(out)?;
+        Ok(())
+    }
+}
+
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let cmd = args.next().ok_or_else(|| anyhow!(
@@ -61,9 +133,23 @@ fn main() -> Result<()> {
 
 fn cmd_gen_benches() -> Result<()> {
     let fixtures = load_fixtures()?;
-    println!("loaded {} fixtures", fixtures.len());
-    // Real generation lands in Task 4/5.
-    bail!("gen-benches generator not yet implemented (Task 4)")
+    let root = out_root();
+    std::fs::create_dir_all(&root)?;
+    for f in &fixtures {
+        if f.files > 0 {
+            // Multi-file fixture handled in Task 5.
+            println!("skip {} (multi-file, handled later)", f.name);
+            continue;
+        }
+        let path = root.join(format!("{}.xlsx", f.name));
+        if path.exists() {
+            println!("ok {} (cached)", f.name);
+            continue;
+        }
+        println!("gen {} -> {}", f.name, path.display());
+        gen::write_single(f, &path)?;
+    }
+    Ok(())
 }
 
 fn cmd_list_fixtures() -> Result<()> {
