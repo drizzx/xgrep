@@ -50,35 +50,56 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
         let name = &sheet_meta.name;
 
         if let Some(filter) = &opts.sheet_filter {
-            if !filter.is_match(name) {
-                continue;
-            }
+            if !filter.is_match(name) { continue; }
         }
-        if !opts.include_hidden
-            && !matches!(sheet_meta.visible, calamine::SheetVisible::Visible)
-        {
+        if !opts.include_hidden && !matches!(sheet_meta.visible, calamine::SheetVisible::Visible) {
             continue;
         }
 
         let range = workbook
             .worksheet_range(name)
             .map_err(|e| SearchError::Sheet { sheet: name.clone(), msg: e.to_string() })?;
+        let formulas = workbook.worksheet_formula(name).ok();
 
-        if opts.layers.contains(LayerSet::DISPLAY) {
-            for (row, col, data) in range.cells() {
-                if data.is_empty() {
-                    continue;
+        let wants_formula = opts.layers.contains(LayerSet::FORMULA);
+        let wants_cached  = opts.layers.contains(LayerSet::CACHED);
+        let wants_display = opts.layers.contains(LayerSet::DISPLAY);
+
+        for (row, col, data) in range.cells() {
+            if data.is_empty() { continue; }
+            let a1 = to_a1(row as u32, col as u32);
+
+            // Look up formula text for this (row, col). calamine 0.26's Range::get_value
+            // takes a (u32, u32) tuple of position. The formula range parallels the
+            // cell range and returns an empty String for non-formula cells.
+            let formula_text: Option<String> = formulas.as_ref()
+                .and_then(|f| f.get_value((row as u32, col as u32)).cloned())
+                .filter(|s| !s.is_empty());
+
+            if let Some(ftxt) = formula_text {
+                if wants_formula {
+                    out.push(CellRecord {
+                        sheet: name.clone(), cell: a1.clone(), layer: Layer::Formula,
+                        text: ftxt,
+                    });
                 }
+                if wants_cached {
+                    let cached = display_value(data);
+                    if !cached.is_empty() {
+                        out.push(CellRecord {
+                            sheet: name.clone(), cell: a1, layer: Layer::Cached,
+                            text: cached,
+                        });
+                    }
+                }
+            } else if wants_display {
                 let text = display_value(data);
-                if text.is_empty() {
-                    continue;
+                if !text.is_empty() {
+                    out.push(CellRecord {
+                        sheet: name.clone(), cell: a1, layer: Layer::Display,
+                        text,
+                    });
                 }
-                out.push(CellRecord {
-                    sheet: name.clone(),
-                    cell: to_a1(row as u32, col as u32),
-                    layer: Layer::Display,
-                    text,
-                });
             }
         }
     }
