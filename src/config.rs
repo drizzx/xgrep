@@ -27,7 +27,7 @@ impl LayerSet {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Layer { Display, Cached, Formula, Comment }
 
 impl Layer {

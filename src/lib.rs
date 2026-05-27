@@ -4,6 +4,7 @@ pub mod cell;
 pub mod config;
 pub mod error;
 pub mod matcher;
+pub mod reader;
 
 use std::path::PathBuf;
 use serde::Serialize;
