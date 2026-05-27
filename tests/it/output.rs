@@ -41,3 +41,36 @@ fn json_output_emits_ndjson_events() {
         let _: serde_json::Value = serde_json::from_str(l).expect(l);
     }
 }
+
+#[test]
+fn count_output_emits_path_count_line() {
+    let block = search_basic("张三");
+    let mut buf = Vec::new();
+    print_block(&block, &mut buf, OutputMode::CountOnly, ColorChoice::Never, false).unwrap();
+    let out = String::from_utf8(buf).unwrap();
+    assert!(out.trim().ends_with(":2"), "expected count of 2, got {out:?}");
+}
+
+#[test]
+fn files_with_matches_emits_path_only_for_matched_files() {
+    let block = search_basic("张三");
+    let mut buf = Vec::new();
+    print_block(&block, &mut buf, OutputMode::FilesOnly, ColorChoice::Never, false).unwrap();
+    let out = String::from_utf8(buf).unwrap();
+    assert!(out.trim().ends_with("basic.xlsx"));
+    assert!(!out.contains("Sheet1"));
+}
+
+#[test]
+fn pretty_output_layer_tag_omitted_for_display_unless_forced() {
+    let block = search_basic("张三");
+    let mut buf = Vec::new();
+    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Never, false).unwrap();
+    let s = String::from_utf8(buf).unwrap();
+    assert!(!s.contains("[display]"));
+
+    let mut buf2 = Vec::new();
+    print_block(&block, &mut buf2, OutputMode::Pretty, ColorChoice::Never, true).unwrap();
+    let s2 = String::from_utf8(buf2).unwrap();
+    assert!(s2.contains("[display]"));
+}
