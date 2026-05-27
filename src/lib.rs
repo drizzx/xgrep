@@ -54,6 +54,71 @@ pub fn bytes_to_char_range(haystack: &str, start_b: usize, end_b: usize) -> Subm
     Submatch { start, end }
 }
 
+use crate::matcher::Pattern;
+use crate::reader::{read_cells, ReaderOptions};
+use std::collections::HashSet;
+
+/// Search a single xlsx file, returning a complete FileBlock ready for the printer.
+///
+/// `invert`: if true, emit matches for cells whose text *does not* match the pattern
+/// (rg `-v`).
+pub fn search_file(
+    path: &std::path::Path,
+    pattern: &Pattern,
+    reader_opts: &ReaderOptions,
+    invert: bool,
+) -> FileBlock {
+    let mut events = vec![MatchEvent::FileBegin { path: path.to_path_buf() }];
+    let mut matches = 0u64;
+    let mut sheets_seen: HashSet<String> = HashSet::new();
+
+    match read_cells(path, reader_opts) {
+        Ok(cells) => {
+            for c in cells {
+                sheets_seen.insert(c.sheet.clone());
+                let hits: Vec<_> = pattern.find_iter(&c.text).collect();
+                let has_hit = !hits.is_empty();
+                let emit = if invert { !has_hit } else { has_hit };
+                if !emit { continue; }
+                let submatches = if invert {
+                    Vec::new()
+                } else {
+                    hits.into_iter()
+                        .map(|(s, e)| bytes_to_char_range(&c.text, s, e))
+                        .collect()
+                };
+                matches += 1;
+                events.push(MatchEvent::Match {
+                    path: path.to_path_buf(),
+                    sheet: c.sheet,
+                    cell: c.cell,
+                    layer: c.layer.as_str().into(),
+                    text: c.text,
+                    submatches,
+                });
+            }
+            events.push(MatchEvent::FileEnd {
+                path: path.to_path_buf(),
+                stats: FileStats {
+                    matches,
+                    sheets_scanned: sheets_seen.len() as u32,
+                },
+            });
+        }
+        Err(e) => {
+            events.push(MatchEvent::Error {
+                path: path.to_path_buf(),
+                message: e.to_string(),
+            });
+            events.push(MatchEvent::FileEnd {
+                path: path.to_path_buf(),
+                stats: FileStats::default(),
+            });
+        }
+    }
+    FileBlock { events }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
