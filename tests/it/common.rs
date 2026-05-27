@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use rust_xlsxwriter::Workbook;
+use rust_xlsxwriter::{ExcelDateTime, Format, Workbook};
 
 /// Build a small workbook at `dir/basic.xlsx` and return its path.
 pub fn write_basic_xlsx(dir: &Path) -> PathBuf {
@@ -90,6 +90,43 @@ pub fn fixture(name: &str) -> PathBuf {
         .join("tests")
         .join("fixtures")
         .join(name)
+}
+
+/// Workbook with a typed date cell (rust_xlsxwriter writes the serial number
+/// plus a date format string, which is exactly what real Excel does).
+pub fn write_dates_xlsx(dir: &Path) -> PathBuf {
+    let path = dir.join("dates.xlsx");
+    let mut wb = Workbook::new();
+    let s = wb.add_worksheet().set_name("Sheet1").unwrap();
+    let fmt = Format::new().set_num_format("yyyy-mm-dd");
+    let dt = ExcelDateTime::from_ymd(2024, 5, 27).unwrap();
+    s.write_datetime_with_format(0, 0, &dt, &fmt).unwrap();
+    wb.save(&path).unwrap();
+    path
+}
+
+/// Workbook with a rich-text cell that has two runs ("张三" + "应收账款").
+pub fn write_richtext_xlsx(dir: &Path) -> PathBuf {
+    let path = dir.join("richtext.xlsx");
+    let mut wb = Workbook::new();
+    let s = wb.add_worksheet().set_name("Sheet1").unwrap();
+    let red = Format::new().set_font_color("red");
+    s.write_rich_string(
+        0, 0,
+        &[(&red, "张三"), (&Format::default(), "应收账款")],
+    ).unwrap();
+    wb.save(&path).unwrap();
+    path
+}
+
+/// Workbook with a merged 2x2 range A1:B2 containing "merged-anchor".
+pub fn write_merged_xlsx(dir: &Path) -> PathBuf {
+    let path = dir.join("merged.xlsx");
+    let mut wb = Workbook::new();
+    let s = wb.add_worksheet().set_name("Sheet1").unwrap();
+    s.merge_range(0, 0, 1, 1, "merged-anchor", &Format::default()).unwrap();
+    wb.save(&path).unwrap();
+    path
 }
 
 use assert_cmd::Command;

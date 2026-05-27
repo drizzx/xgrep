@@ -15,7 +15,8 @@ name = "xgrep"
 path = "src/lib.rs"
 
 [dependencies]
-calamine = "0.26"
+calamine = { version = "0.26", features = ["dates"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 regex = "1.10"
 ignore = "0.4"

@@ -13,3 +13,5 @@ mod hidden;
 mod output;
 #[path = "it/errors.rs"]
 mod errors;
+#[path = "it/extras.rs"]
+mod extras;

@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use calamine::{open_workbook, Data, DataType, Reader, Xlsx};
+use chrono::Timelike as _;
 
 use crate::cell::to_a1;
 use crate::config::{Layer, LayerSet};
@@ -142,7 +143,22 @@ fn display_value(d: &Data) -> String {
         Data::Float(f) => format_number(*f),
         Data::Int(i) => i.to_string(),
         Data::Bool(b) => b.to_string(),
-        Data::DateTime(dt) => dt.to_string(),
+        Data::DateTime(dt) => {
+            // ExcelDateTime::Display just prints the raw serial float (e.g. "45438").
+            // When the `dates` feature is active, as_datetime() returns a
+            // chrono::NaiveDateTime which we format as "YYYY-MM-DD HH:MM:SS".
+            // For date-only values (time == 00:00:00) we output just the date part.
+            if let Some(ndt) = dt.as_datetime() {
+                let t = ndt.time();
+                if t.hour() == 0 && t.minute() == 0 && t.second() == 0 {
+                    ndt.format("%Y-%m-%d").to_string()
+                } else {
+                    ndt.format("%Y-%m-%d %H:%M:%S").to_string()
+                }
+            } else {
+                dt.to_string()
+            }
+        }
         Data::DateTimeIso(s) => s.clone(),
         Data::DurationIso(s) => s.clone(),
         Data::Error(e) => format!("#{e:?}"),
