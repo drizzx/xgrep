@@ -63,6 +63,20 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
     // happens until we ask for an entry). The cost we save is the *repeated*
     // open-then-parse-workbook.xml cycle that v0.1 did inside each helper.
     let mut zip_index = ZipIndex::open(path)?;
+
+    let want_fast_path = !opts.disable_fast_path && opts.pattern.is_some();
+    let sst = if want_fast_path {
+        sst::parse(&mut zip_index)?
+    } else {
+        Vec::new()
+    };
+    let hit_set = sst::build_hit_set(&sst, opts.pattern);
+    let augmented = if want_fast_path {
+        Some(fast_path::augment(opts.pattern.unwrap(), &hit_set))
+    } else {
+        None
+    };
+
     let mut workbook: Xlsx<_> = open_workbook(path).map_err(map_calamine_err)?;
     let sheets = workbook.sheets_metadata().to_vec();
     let mut out = Vec::new();
@@ -81,6 +95,29 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
         if !opts.include_hidden && !matches!(sheet_meta.visible, calamine::SheetVisible::Visible) {
             continue;
         }
+
+        let needs_parse = if let Some(aug) = augmented.as_ref() {
+            let sheet_xml_path = path_lookup.get(name);
+            match sheet_xml_path {
+                Some(sxp) => {
+                    let xml_bytes = zip_index
+                        .read_to_vec(sxp)
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default();
+                    fast_path::decide(&xml_bytes, aug, hit_set.is_empty())
+                }
+                None => true, // can't byte-scan -> conservative parse
+            }
+        } else {
+            true
+        };
+
+        if !needs_parse {
+            // skip this sheet entirely; debug oracle (Task 19) will cross-check
+            continue;
+        }
+
         let range = workbook
             .worksheet_range(name)
             .map_err(|e| SearchError::Sheet { sheet: name.clone(), msg: e.to_string() })?;
