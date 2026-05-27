@@ -116,7 +116,30 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
         };
 
         if !needs_parse {
-            // skip this sheet entirely; debug oracle (Task 19) will cross-check
+            #[cfg(debug_assertions)]
+            {
+                if let Some(pat) = opts.pattern {
+                    // Parse the sheet "the old way" and ensure none of its cells match.
+                    // This is purely a safety check; result is discarded.
+                    let range = workbook
+                        .worksheet_range(name)
+                        .map_err(|e| SearchError::Sheet { sheet: name.clone(), msg: e.to_string() })?;
+                    let formulas = workbook.worksheet_formula(name).ok();
+                    let empty_rows: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                    let empty_cols: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                    let input = SheetParseInput {
+                        sheet_name: name,
+                        range: &range,
+                        formulas: formulas.as_ref(),
+                        layers: opts.layers,
+                        hidden_rows: &empty_rows,
+                        hidden_cols: &empty_cols,
+                        include_hidden: opts.include_hidden,
+                    };
+                    let fallback = cells::parse_sheet(&input);
+                    oracle::assert_skipped_safely(name, &fallback, pat);
+                }
+            }
             continue;
         }
 
