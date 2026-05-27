@@ -114,9 +114,9 @@ fn map_calamine_err(e: calamine::XlsxError) -> SearchError {
     let lower = msg.to_lowercase();
     if lower.contains("encrypted") || lower.contains("password") {
         SearchError::Encrypted
-    } else if matches!(e, calamine::XlsxError::Io(_)) {
-        SearchError::Parse(msg)
     } else {
+        // We don't distinguish XlsxError::Io from other parse errors at this
+        // layer — callers see the stringified message either way.
         SearchError::Parse(msg)
     }
 }
