@@ -3,6 +3,7 @@
 //! `include_hidden` flags.
 
 pub mod comments;
+pub mod hidden;
 pub mod zip_index;
 
 use std::path::Path;
@@ -83,7 +84,11 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
         let (hidden_rows, hidden_cols) = if opts.include_hidden {
             (Default::default(), Default::default())
         } else if let Some(sheet_xml) = path_lookup.get(name) {
-            hidden_row_col_for_sheet(path, sheet_xml)
+            let mut idx = match ZipIndex::open(path) {
+                Ok(i) => i,
+                Err(_) => return Err(SearchError::Parse("zip reopen for hidden detection".into())),
+            };
+            hidden::detect(&mut idx, sheet_xml)
         } else {
             (Default::default(), Default::default())
         };
@@ -274,44 +279,4 @@ fn sheet_xml_paths(path: &std::path::Path) -> Result<Vec<(String, String)>, Sear
         .collect())
 }
 
-
-fn hidden_row_col_for_sheet(
-    path: &std::path::Path,
-    sheet_xml_zip_path: &str,
-) -> (
-    std::collections::HashSet<u32>,
-    std::collections::HashSet<u32>,
-) {
-    use std::collections::HashSet;
-    let mut hidden_rows = HashSet::new();
-    let mut hidden_cols = HashSet::new();
-    let Ok(file) = std::fs::File::open(path) else {
-        return (hidden_rows, hidden_cols);
-    };
-    let Ok(mut zip) = zip::ZipArchive::new(file) else {
-        return (hidden_rows, hidden_cols);
-    };
-    let mut xml = String::new();
-    if let Ok(mut f) = zip.by_name(sheet_xml_zip_path) {
-        let _ = f.read_to_string(&mut xml);
-    } else {
-        return (hidden_rows, hidden_cols);
-    }
-    let re_row = regex::Regex::new(r#"<row[^>]*r="(\d+)"[^>]*hidden="1""#).unwrap();
-    for cap in re_row.captures_iter(&xml) {
-        if let Ok(n) = cap[1].parse::<u32>() {
-            hidden_rows.insert(n.saturating_sub(1));
-        }
-    }
-    let re_col =
-        regex::Regex::new(r#"<col[^>]*min="(\d+)"[^>]*max="(\d+)"[^>]*hidden="1""#).unwrap();
-    for cap in re_col.captures_iter(&xml) {
-        let lo: u32 = cap[1].parse().unwrap_or(1);
-        let hi: u32 = cap[2].parse().unwrap_or(lo);
-        for c in lo..=hi {
-            hidden_cols.insert(c.saturating_sub(1));
-        }
-    }
-    (hidden_rows, hidden_cols)
-}
 
