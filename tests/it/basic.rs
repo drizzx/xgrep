@@ -23,3 +23,19 @@ fn reader_emits_display_values_for_strings_and_numbers() {
     assert!(got.contains(&("Sheet1".into(), "B2".into(), Layer::Display, "100".into())));
     assert!(got.contains(&("汇总".into(), "A1".into(), Layer::Display, "张三应收账款".into())));
 }
+
+#[test]
+fn sheet_glob_excludes_unmatched_sheets() {
+    use globset::Glob;
+    let dir = TempDir::new().unwrap();
+    let path = write_basic_xlsx(dir.path());
+
+    let opts = ReaderOptions {
+        layers: xgrep::config::LayerSet::defaults(),
+        include_hidden: true,
+        sheet_filter: Some(Glob::new("汇总").unwrap().compile_matcher()),
+    };
+    let cells = read_cells(&path, &opts).unwrap();
+    assert!(cells.iter().all(|c| c.sheet == "汇总"));
+    assert!(!cells.is_empty());
+}
