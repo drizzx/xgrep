@@ -188,6 +188,71 @@ fn cmd_list_fixtures() -> Result<()> {
     Ok(())
 }
 
-fn cmd_measure_memory(_args: Vec<String>) -> Result<()> {
-    bail!("measure-memory not yet implemented (Task 7)")
+fn cmd_measure_memory(args: Vec<String>) -> Result<()> {
+    // usage: cargo xtask measure-memory --fixture <name> [--pattern <regex>]
+    let mut fixture_name: Option<String> = None;
+    let mut pattern_text: String = "HIT".to_string();
+    let mut it = args.into_iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--fixture" => fixture_name = it.next(),
+            "--pattern" => pattern_text = it.next().unwrap_or_default(),
+            other => bail!("unknown arg: {other}"),
+        }
+    }
+    let name = fixture_name.ok_or_else(|| anyhow!("--fixture <name> required"))?;
+    let fixtures = load_fixtures()?;
+    let spec = fixtures
+        .iter()
+        .find(|f| f.name == name)
+        .ok_or_else(|| anyhow!("no fixture named {name} in fixtures.toml"))?;
+    let path = if spec.files > 0 {
+        out_root().join(&spec.name)
+    } else {
+        out_root().join(format!("{}.xlsx", spec.name))
+    };
+    if !path.exists() {
+        bail!("fixture not generated; run `cargo xtask gen-benches` first");
+    }
+
+    let pattern = xgrep::matcher::Pattern::compile(
+        &pattern_text,
+        xgrep::matcher::CaseMode::Sensitive,
+        false,
+        false,
+    )?;
+    let reader_opts = xgrep::reader::ReaderOptions::default();
+
+    let before = memory_stats::memory_stats()
+        .map(|s| s.physical_mem)
+        .unwrap_or(0);
+    // Run a search end-to-end on the fixture path(s).
+    let paths = if spec.files > 0 {
+        std::fs::read_dir(&path)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("xlsx"))
+            .collect::<Vec<_>>()
+    } else {
+        vec![path.clone()]
+    };
+    let mut total_matches = 0u64;
+    for p in &paths {
+        let block = xgrep::search_file(p, &pattern, &reader_opts, false);
+        for ev in &block.events {
+            if matches!(ev, xgrep::MatchEvent::Match { .. }) {
+                total_matches += 1;
+            }
+        }
+    }
+    let after = memory_stats::memory_stats()
+        .map(|s| s.physical_mem)
+        .unwrap_or(0);
+
+    println!(
+        "fixture={name}  pattern={pattern_text}  matches={total_matches}  physical_mem_before={} KB  physical_mem_after={} KB  delta={} KB",
+        before / 1024,
+        after / 1024,
+        (after.saturating_sub(before)) / 1024,
+    );
+    Ok(())
 }

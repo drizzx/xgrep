@@ -14,3 +14,4 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 rust_xlsxwriter = "0.79"
 memory-stats = "1"
+xgrep = { path = ".." }
