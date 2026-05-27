@@ -1,0 +1,1 @@
+//! xgrep — Excel-aware grep.
