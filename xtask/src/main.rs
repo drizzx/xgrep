@@ -137,8 +137,16 @@ fn cmd_gen_benches() -> Result<()> {
     std::fs::create_dir_all(&root)?;
     for f in &fixtures {
         if f.files > 0 {
-            // Multi-file fixture handled in Task 5.
-            println!("skip {} (multi-file, handled later)", f.name);
+            let dir = root.join(&f.name);
+            std::fs::create_dir_all(&dir)?;
+            for i in 0..f.files {
+                let path = dir.join(format!("file_{i:03}.xlsx"));
+                if path.exists() {
+                    continue;
+                }
+                gen::write_single(f, &path)?;
+            }
+            println!("gen {} -> {} ({} files)", f.name, dir.display(), f.files);
             continue;
         }
         let path = root.join(format!("{}.xlsx", f.name));
