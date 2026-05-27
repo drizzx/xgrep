@@ -76,6 +76,20 @@ Emits one JSON object per line (NDJSON). Events:
 
 Submatch `start` / `end` are **0-indexed Unicode character** offsets, half-open.
 
+## Development
+
+- Run tests: `cargo test`
+- Generate bench fixtures: `cargo xtask gen-benches`
+- List fixtures + sizes: `cargo xtask list-fixtures`
+- Run benches (local only): `cargo bench`
+- Spot-check memory: `cargo xtask measure-memory --fixture sst_heavy_low_hit`
+
+## Troubleshooting
+
+If a search produces fewer matches than `xgrep v0.1` did on the same file, set
+`XGREP_DISABLE_FAST_PATH=1` and rerun. If the results match, the bug is in the
+v0.2 fast-path — please open an issue with the offending fixture attached.
+
 ## Exit codes (rg-aligned)
 
 | Code | Meaning |
@@ -86,7 +100,7 @@ Submatch `start` / `end` are **0-indexed Unicode character** offsets, half-open.
 
 Per-file errors (encrypted/corrupt xlsx, permission denied) are reported on stderr and do **not** alone cause exit 2.
 
-## Known limitations (v0.1)
+## Known limitations
 
 - Only `.xlsx` (no `.xls`, `.xlsb`, `.ods`, `.csv`). Reader is trait-ready for future formats.
 - No encrypted-xlsx decryption: encrypted files are reported and skipped.

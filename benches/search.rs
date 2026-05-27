@@ -62,7 +62,13 @@ fn pattern_for(label: &str) -> Pattern {
 
 fn bench_single(c: &mut Criterion, fixture: &str, patterns: &[&str]) {
     let path = require_single(fixture);
-    let opts = ReaderOptions::default();
+    let disable_fp = std::env::var_os("XGREP_DISABLE_FAST_PATH")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+    let opts = ReaderOptions {
+        disable_fast_path: disable_fp,
+        ..ReaderOptions::default()
+    };
     let mut g = c.benchmark_group(fixture);
     for label in patterns {
         let pat = pattern_for(label);
@@ -75,7 +81,13 @@ fn bench_single(c: &mut Criterion, fixture: &str, patterns: &[&str]) {
 
 fn bench_many_small(c: &mut Criterion, patterns: &[&str]) {
     let paths = require_dir("many_small");
-    let opts = ReaderOptions::default();
+    let disable_fp = std::env::var_os("XGREP_DISABLE_FAST_PATH")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+    let opts = ReaderOptions {
+        disable_fast_path: disable_fp,
+        ..ReaderOptions::default()
+    };
     let mut g = c.benchmark_group("many_small");
     for label in patterns {
         let pat = pattern_for(label);
