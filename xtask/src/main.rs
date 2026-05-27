@@ -23,7 +23,9 @@ pub struct FixtureSpec {
     pub description: String,
 }
 
-fn one() -> u32 { 1 }
+fn one() -> u32 {
+    1
+}
 
 #[derive(Debug, Deserialize)]
 struct FixturesFile {
@@ -33,17 +35,23 @@ struct FixturesFile {
 fn load_fixtures() -> Result<Vec<FixtureSpec>> {
     let manifest = env!("CARGO_MANIFEST_DIR");
     // xtask's manifest dir is xgrep/xtask; the fixtures.toml lives at xgrep/benches/.
-    let path = Path::new(manifest).join("..").join("benches").join("fixtures.toml");
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let parsed: FixturesFile = toml::from_str(&text)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let path = Path::new(manifest)
+        .join("..")
+        .join("benches")
+        .join("fixtures.toml");
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let parsed: FixturesFile =
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     Ok(parsed.fixture)
 }
 
 fn out_root() -> PathBuf {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest).join("..").join("target").join("bench-fixtures")
+    Path::new(manifest)
+        .join("..")
+        .join("target")
+        .join("bench-fixtures")
 }
 
 mod gen {
@@ -92,21 +100,19 @@ mod gen {
                 ws.write_string(r, 1, s_text)
                     .with_context(|| format!("B{}", r + 1))?;
                 // Column C: optionally inline string (write_string_only bypasses sst when feature set)
-                if spec.inline_strings_pct > 0.0 {
-                    if ((r as f32) / (spec.rows as f32)) < spec.inline_strings_pct {
-                        ws.write_string(r, 2, &format!("inline-{r}"))
-                            .with_context(|| format!("C{}", r + 1))?;
-                    }
+                if spec.inline_strings_pct > 0.0
+                    && ((r as f32) / (spec.rows as f32)) < spec.inline_strings_pct
+                {
+                    ws.write_string(r, 2, format!("inline-{r}"))
+                        .with_context(|| format!("C{}", r + 1))?;
                 }
                 // Column D: optional formula
                 // Note: write_formula_with_result does not exist in rust_xlsxwriter 0.79.
                 // Use write_formula + set_formula_result instead.
-                if spec.formula_pct > 0.0 {
-                    if ((r as f32) / (spec.rows as f32)) < spec.formula_pct {
-                        ws.write_formula(r, 3, "=A1+B1")
-                            .with_context(|| format!("D{}", r + 1))?;
-                        ws.set_formula_result(r, 3, &format!("{:.1}", (r as f64) * 2.5));
-                    }
+                if spec.formula_pct > 0.0 && ((r as f32) / (spec.rows as f32)) < spec.formula_pct {
+                    ws.write_formula(r, 3, "=A1+B1")
+                        .with_context(|| format!("D{}", r + 1))?;
+                    ws.set_formula_result(r, 3, format!("{:.1}", (r as f64) * 2.5));
                 }
             }
         }
@@ -120,9 +126,9 @@ mod gen {
 
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
-    let cmd = args.next().ok_or_else(|| anyhow!(
-        "usage: cargo xtask <gen-benches|list-fixtures|measure-memory>"
-    ))?;
+    let cmd = args
+        .next()
+        .ok_or_else(|| anyhow!("usage: cargo xtask <gen-benches|list-fixtures|measure-memory>"))?;
     match cmd.as_str() {
         "gen-benches" => cmd_gen_benches(),
         "list-fixtures" => cmd_list_fixtures(),
@@ -163,7 +169,7 @@ fn cmd_gen_benches() -> Result<()> {
 fn cmd_list_fixtures() -> Result<()> {
     let fixtures = load_fixtures()?;
     let root = out_root();
-    println!("{:<24} {:>12}  {}", "name", "size", "path");
+    println!("{:<24} {:>12}  path", "name", "size");
     println!("{}", "-".repeat(70));
     for f in &fixtures {
         let path = if f.files > 0 {

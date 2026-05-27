@@ -20,15 +20,22 @@ pub struct HitSet {
 
 impl HitSet {
     pub fn new(n: usize) -> Self {
-        let words = (n + 63) / 64;
-        Self { bits: vec![0; words], len: n }
+        let words = n.div_ceil(64);
+        Self {
+            bits: vec![0; words],
+            len: n,
+        }
     }
     pub fn insert(&mut self, i: usize) {
-        if i >= self.len { return; }
+        if i >= self.len {
+            return;
+        }
         self.bits[i / 64] |= 1u64 << (i % 64);
     }
     pub fn contains(&self, i: usize) -> bool {
-        if i >= self.len { return false; }
+        if i >= self.len {
+            return false;
+        }
         (self.bits[i / 64] >> (i % 64)) & 1 == 1
     }
     pub fn is_empty(&self) -> bool {

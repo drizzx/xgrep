@@ -9,10 +9,7 @@ use crate::reader::zip_index::ZipIndex;
 /// Errors are swallowed (returns empty sets) — hidden detection is best-effort;
 /// the worst case is including a row/col we should have hidden, which keeps
 /// matches but doesn't lose them.
-pub fn detect(
-    index: &mut ZipIndex,
-    sheet_xml_zip_path: &str,
-) -> (HashSet<u32>, HashSet<u32>) {
+pub fn detect(index: &mut ZipIndex, sheet_xml_zip_path: &str) -> (HashSet<u32>, HashSet<u32>) {
     let mut hidden_rows = HashSet::new();
     let mut hidden_cols = HashSet::new();
     let xml = match index.read_to_string(sheet_xml_zip_path) {

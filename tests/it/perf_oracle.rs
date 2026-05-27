@@ -85,7 +85,12 @@ fn oracle_formula_fixture_cached_value() {
 fn oracle_hidden_fixture_all_markers() {
     let dir = TempDir::new().unwrap();
     let path = common::write_hidden_xlsx(dir.path());
-    for marker in &["open-marker", "hidden-row-marker", "hidden-col-marker", "hidden-sheet-marker"] {
+    for marker in &[
+        "open-marker",
+        "hidden-row-marker",
+        "hidden-col-marker",
+        "hidden-sheet-marker",
+    ] {
         assert_oracle_equivalent(&path, marker, CaseMode::Sensitive);
     }
 }

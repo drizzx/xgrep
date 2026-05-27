@@ -99,7 +99,9 @@ pub fn search_file(
     let mut enriched = reader_opts.clone();
     enriched.pattern = Some(pattern);
 
-    let mut events = vec![MatchEvent::FileBegin { path: path.to_path_buf() }];
+    let mut events = vec![MatchEvent::FileBegin {
+        path: path.to_path_buf(),
+    }];
     let mut matches = 0u64;
     let mut sheets_seen: HashSet<String> = HashSet::new();
 

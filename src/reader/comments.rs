@@ -12,23 +12,28 @@ pub fn extract(index: &mut ZipIndex) -> Result<Vec<(String, String, String)>, Se
         .map(|s| (s.name.clone(), s.xml_path.clone()))
         .collect();
     let mut out = Vec::new();
-    let re_comment = regex::Regex::new(
-        r#"<comment[^>]*ref="([^"]+)"[^>]*>([\s\S]*?)</comment>"#
-    ).unwrap();
+    let re_comment =
+        regex::Regex::new(r#"<comment[^>]*ref="([^"]+)"[^>]*>([\s\S]*?)</comment>"#).unwrap();
     let re_t = regex::Regex::new(r#"<t[^>]*>([\s\S]*?)</t>"#).unwrap();
     let re_target = regex::Regex::new(r#"Target="([^"]*comments[^"]+\.xml)""#).unwrap();
 
     for (sheet_name, sheet_xml) in sheets {
         let rels_path = sheet_xml.replacen("worksheets/", "worksheets/_rels/", 1) + ".rels";
-        let Some(rels) = index.read_to_string(&rels_path)? else { continue; };
-        let Some(cap) = re_target.captures(&rels) else { continue; };
+        let Some(rels) = index.read_to_string(&rels_path)? else {
+            continue;
+        };
+        let Some(cap) = re_target.captures(&rels) else {
+            continue;
+        };
         let target = cap[1].to_string();
         let comments_path = if let Some(stripped) = target.strip_prefix("../") {
             format!("xl/{stripped}")
         } else {
             format!("xl/worksheets/{target}")
         };
-        let Some(xml) = index.read_to_string(&comments_path)? else { continue; };
+        let Some(xml) = index.read_to_string(&comments_path)? else {
+            continue;
+        };
 
         for cap in re_comment.captures_iter(&xml) {
             let cell = cap[1].to_string();

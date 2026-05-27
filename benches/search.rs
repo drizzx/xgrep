@@ -52,10 +52,10 @@ fn search_one(path: &Path, pat: &Pattern, opts: &ReaderOptions) -> u64 {
 
 fn pattern_for(label: &str) -> Pattern {
     let (raw, case, fixed) = match label {
-        "nonhit"  => ("ZZZ_NEVER_MATCH", CaseMode::Sensitive, true),
-        "hit"     => ("HIT",             CaseMode::Sensitive, true),
-        "regex"   => (r"row-\d{4,}",     CaseMode::Sensitive, false),
-        other     => panic!("unknown pattern label {other}"),
+        "nonhit" => ("ZZZ_NEVER_MATCH", CaseMode::Sensitive, true),
+        "hit" => ("HIT", CaseMode::Sensitive, true),
+        "regex" => (r"row-\d{4,}", CaseMode::Sensitive, false),
+        other => panic!("unknown pattern label {other}"),
     };
     Pattern::compile(raw, case, fixed, false).unwrap()
 }
@@ -93,10 +93,10 @@ fn bench_many_small(c: &mut Criterion, patterns: &[&str]) {
 }
 
 fn benches(c: &mut Criterion) {
-    bench_single(c, "sst_heavy_low_hit",     &["nonhit", "hit", "regex"]);
-    bench_single(c, "sst_heavy_high_hit",    &["hit", "regex", "nonhit"]);
-    bench_single(c, "formula_heavy",         &["nonhit", "hit", "regex"]);
-    bench_single(c, "inline_strings_heavy",  &["nonhit", "hit", "regex"]);
+    bench_single(c, "sst_heavy_low_hit", &["nonhit", "hit", "regex"]);
+    bench_single(c, "sst_heavy_high_hit", &["hit", "regex", "nonhit"]);
+    bench_single(c, "formula_heavy", &["nonhit", "hit", "regex"]);
+    bench_single(c, "inline_strings_heavy", &["nonhit", "hit", "regex"]);
     bench_many_small(c, &["nonhit", "hit", "regex"]);
 }
 

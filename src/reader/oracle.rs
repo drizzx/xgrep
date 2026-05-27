@@ -12,11 +12,7 @@ use crate::reader::CellRecord;
 
 /// Panic if any of the `fallback_cells` matches `pattern`. Called from the
 /// "skip" branch of `read_cells` in debug builds.
-pub fn assert_skipped_safely(
-    sheet_name: &str,
-    fallback_cells: &[CellRecord],
-    pattern: &Pattern,
-) {
+pub fn assert_skipped_safely(sheet_name: &str, fallback_cells: &[CellRecord], pattern: &Pattern) {
     for c in fallback_cells {
         if pattern.is_match(&c.text) {
             panic!(

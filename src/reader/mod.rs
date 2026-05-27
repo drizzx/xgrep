@@ -47,7 +47,9 @@ impl<'a> ReaderOptions<'a> {
 }
 
 impl<'a> Default for ReaderOptions<'a> {
-    fn default() -> Self { Self::defaults_for_v01() }
+    fn default() -> Self {
+        Self::defaults_for_v01()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,7 +60,10 @@ pub struct CellRecord {
     pub text: String,
 }
 
-pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellRecord>, SearchError> {
+pub fn read_cells<'a>(
+    path: &Path,
+    opts: &ReaderOptions<'a>,
+) -> Result<Vec<CellRecord>, SearchError> {
     // One ZipIndex per file — used by hidden + comments. Workbook (calamine) is
     // opened separately because calamine needs an owned file handle (it parses
     // the zip itself). This is fine: zip 2's File-based open is fast (no decompression
@@ -92,7 +97,9 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
     for sheet_meta in &sheets {
         let name = &sheet_meta.name;
         if let Some(filter) = &opts.sheet_filter {
-            if !filter.is_match(name) { continue; }
+            if !filter.is_match(name) {
+                continue;
+            }
         }
         if !opts.include_hidden && !matches!(sheet_meta.visible, calamine::SheetVisible::Visible) {
             continue;
@@ -123,10 +130,15 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
                     // This is purely a safety check; result is discarded.
                     let range = workbook
                         .worksheet_range(name)
-                        .map_err(|e| SearchError::Sheet { sheet: name.clone(), msg: e.to_string() })?;
+                        .map_err(|e| SearchError::Sheet {
+                            sheet: name.clone(),
+                            msg: e.to_string(),
+                        })?;
                     let formulas = workbook.worksheet_formula(name).ok();
-                    let empty_rows: std::collections::HashSet<u32> = std::collections::HashSet::new();
-                    let empty_cols: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                    let empty_rows: std::collections::HashSet<u32> =
+                        std::collections::HashSet::new();
+                    let empty_cols: std::collections::HashSet<u32> =
+                        std::collections::HashSet::new();
                     let input = SheetParseInput {
                         sheet_name: name,
                         range: &range,
@@ -145,7 +157,10 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
 
         let range = workbook
             .worksheet_range(name)
-            .map_err(|e| SearchError::Sheet { sheet: name.clone(), msg: e.to_string() })?;
+            .map_err(|e| SearchError::Sheet {
+                sheet: name.clone(),
+                msg: e.to_string(),
+            })?;
         let formulas = workbook.worksheet_formula(name).ok();
         let (hidden_rows, hidden_cols) = if opts.include_hidden {
             (Default::default(), Default::default())
@@ -175,9 +190,13 @@ pub fn read_cells<'a>(path: &Path, opts: &ReaderOptions<'a>) -> Result<Vec<CellR
         let raw = comments::extract(&mut zip_index).unwrap_or_default();
         for (sheet, cell, text) in raw {
             if let Some(filter) = &opts.sheet_filter {
-                if !filter.is_match(&sheet) { continue; }
+                if !filter.is_match(&sheet) {
+                    continue;
+                }
             }
-            if !opts.include_hidden && !visible_sheets.contains(&sheet) { continue; }
+            if !opts.include_hidden && !visible_sheets.contains(&sheet) {
+                continue;
+            }
             out.push(CellRecord {
                 sheet,
                 cell,

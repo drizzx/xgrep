@@ -27,10 +27,16 @@ pub fn parse_sheet(input: &SheetParseInput) -> Vec<CellRecord> {
     let wants_display = input.layers.contains(LayerSet::DISPLAY);
 
     for (row, col, data) in input.range.cells() {
-        if data.is_empty() { continue; }
+        if data.is_empty() {
+            continue;
+        }
         if !input.include_hidden {
-            if input.hidden_rows.contains(&(row as u32)) { continue; }
-            if input.hidden_cols.contains(&(col as u32)) { continue; }
+            if input.hidden_rows.contains(&(row as u32)) {
+                continue;
+            }
+            if input.hidden_cols.contains(&(col as u32)) {
+                continue;
+            }
         }
         let a1 = to_a1(row as u32, col as u32);
 

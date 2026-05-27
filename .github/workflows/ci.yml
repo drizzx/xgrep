@@ -18,9 +18,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --all-targets --locked
+        run: cargo build --workspace --all-targets --locked
       - name: Test
-        run: cargo test --all-targets --locked
+        run: cargo test --workspace --all-targets --locked
+      - name: Compile benches
+        run: cargo bench --no-run --workspace --locked
 
   lint:
     name: Lint
@@ -32,4 +34,4 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt -- --check
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets -- -D warnings

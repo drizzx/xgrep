@@ -5,7 +5,7 @@
 //!   - augmented regex matches sheet xml bytes  -> need full parse
 //!   - hit_set is empty AND no match            -> safe to skip
 //!   - hit_set is non-empty AND no match        -> safe to skip iff augmented
-//!                                                 already encoded every hit idx
+//!     already encoded every hit idx
 //!
 //! "encoded every hit idx" is the THRESHOLD limit: when the hit set exceeds
 //! THRESHOLD, we don't try to fit all hit indices into the regex; instead we
@@ -70,8 +70,12 @@ fn strip_anchors(raw: &str) -> String {
     // (e.g. multiline mode markers) stay; they'd just produce false positives in
     // the byte scan, which is safe.
     let mut s = raw;
-    if let Some(stripped) = s.strip_prefix('^') { s = stripped; }
-    if let Some(stripped) = s.strip_suffix('$') { s = stripped; }
+    if let Some(stripped) = s.strip_prefix('^') {
+        s = stripped;
+    }
+    if let Some(stripped) = s.strip_suffix('$') {
+        s = stripped;
+    }
     s.to_string()
 }
 
@@ -215,7 +219,10 @@ mod tests {
         let mut hs = HitSet::new(20);
         hs.insert(1);
         let aug = augment(&pat, &hs);
-        let r = match aug { AugmentResult::Augmented(r) => r, _ => panic!() };
+        let r = match aug {
+            AugmentResult::Augmented(r) => r,
+            _ => panic!(),
+        };
         // Must match both: any "<v>" sequence (from the user pattern) and the
         // specific "<v>1</v>" (from the sst alt).
         assert!(r.is_match("foo<v>"));

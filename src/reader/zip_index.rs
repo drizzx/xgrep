@@ -27,8 +27,8 @@ pub struct ZipIndex {
 impl ZipIndex {
     pub fn open(path: &Path) -> Result<Self, SearchError> {
         let file = File::open(path).map_err(SearchError::Io)?;
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
+        let mut archive =
+            ZipArchive::new(file).map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
         let sheets = parse_sheets(&mut archive)?;
         Ok(Self {
             archive,
@@ -37,8 +37,12 @@ impl ZipIndex {
         })
     }
 
-    pub fn path(&self) -> &Path { &self.path }
-    pub fn sheets(&self) -> &[SheetEntry] { &self.sheets }
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+    pub fn sheets(&self) -> &[SheetEntry] {
+        &self.sheets
+    }
 
     /// Read a zip entry into a `String`. Returns Ok(None) if the entry does
     /// not exist (commonly the case for optional files like sharedStrings).
@@ -95,9 +99,8 @@ fn parse_sheets(archive: &mut ZipArchive<File>) -> Result<Vec<SheetEntry>, Searc
     if let Ok(mut f) = archive.by_name("xl/_rels/workbook.xml.rels") {
         f.read_to_string(&mut rels).map_err(SearchError::Io)?;
     }
-    let re_rel = regex::Regex::new(
-        r#"<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)""#
-    ).unwrap();
+    let re_rel =
+        regex::Regex::new(r#"<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)""#).unwrap();
     let mut rid_to_target: HashMap<String, String> = HashMap::new();
     for cap in re_rel.captures_iter(&rels) {
         rid_to_target.insert(cap[1].to_string(), cap[2].to_string());
@@ -157,6 +160,9 @@ mod tests {
         let p = dir.path().join("tiny.xlsx");
         tiny_workbook(&p);
         let mut idx = ZipIndex::open(&p).unwrap();
-        assert!(idx.read_to_string("xl/no-such-entry.xml").unwrap().is_none());
+        assert!(idx
+            .read_to_string("xl/no-such-entry.xml")
+            .unwrap()
+            .is_none());
     }
 }
