@@ -4,6 +4,7 @@ pub mod cell;
 pub mod config;
 pub mod error;
 pub mod matcher;
+pub mod printer;
 pub mod reader;
 pub mod walker;
 pub mod worker;
