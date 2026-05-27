@@ -76,3 +76,21 @@ pub fn write_comment_xlsx(dir: &Path) -> PathBuf {
     wb.save(&path).unwrap();
     path
 }
+
+use assert_cmd::Command;
+
+/// Run the compiled `xgrep` binary with the given args inside `cwd`.
+/// Returns (stdout, stderr, exit_code).
+pub fn run_xgrep(cwd: &Path, args: &[&str]) -> (String, String, i32) {
+    let assert = Command::cargo_bin("xgrep").unwrap()
+        .current_dir(cwd)
+        .args(args)
+        .env("NO_COLOR", "1")
+        .assert();
+    let out = assert.get_output();
+    (
+        String::from_utf8_lossy(&out.stdout).to_string(),
+        String::from_utf8_lossy(&out.stderr).to_string(),
+        out.status.code().unwrap_or(-1),
+    )
+}

@@ -92,3 +92,73 @@ fn pretty_output_omits_ansi_when_color_never() {
     let out = String::from_utf8(buf).unwrap();
     assert!(!out.contains('\x1b'));
 }
+
+use super::common::run_xgrep;
+
+#[test]
+fn cli_finds_basic_match_and_exits_zero() {
+    let dir = TempDir::new().unwrap();
+    write_basic_xlsx(dir.path());
+    let (stdout, _, code) = run_xgrep(dir.path(), &["张三", "--color", "never"]);
+    assert_eq!(code, 0, "expected match → exit 0");
+    assert!(stdout.contains("basic.xlsx"));
+    assert!(stdout.contains("Sheet1!A2"));
+}
+
+#[test]
+fn cli_no_match_exits_one() {
+    let dir = TempDir::new().unwrap();
+    write_basic_xlsx(dir.path());
+    let (_, _, code) = run_xgrep(dir.path(), &["nonexistent-needle-XYZ", "--color", "never"]);
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn cli_invalid_regex_exits_two() {
+    let dir = TempDir::new().unwrap();
+    write_basic_xlsx(dir.path());
+    let (_, stderr, code) = run_xgrep(dir.path(), &["a("]);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("invalid regex"));
+}
+
+#[test]
+fn cli_count_flag_prints_path_count() {
+    let dir = TempDir::new().unwrap();
+    write_basic_xlsx(dir.path());
+    let (stdout, _, code) = run_xgrep(dir.path(), &["-c", "张三", "--color", "never"]);
+    assert_eq!(code, 0);
+    assert!(stdout.trim().ends_with(":2"), "got {stdout:?}");
+}
+
+#[test]
+fn cli_files_with_matches_prints_path_only() {
+    let dir = TempDir::new().unwrap();
+    write_basic_xlsx(dir.path());
+    let (stdout, _, code) = run_xgrep(dir.path(), &["-l", "张三", "--color", "never"]);
+    assert_eq!(code, 0);
+    let trimmed = stdout.trim();
+    assert!(trimmed.ends_with("basic.xlsx"));
+    assert!(!trimmed.contains("Sheet1"));
+}
+
+#[test]
+fn cli_json_flag_emits_valid_ndjson() {
+    let dir = TempDir::new().unwrap();
+    write_basic_xlsx(dir.path());
+    let (stdout, _, code) = run_xgrep(dir.path(), &["--json", "张三"]);
+    assert_eq!(code, 0);
+    for line in stdout.lines() {
+        let _: serde_json::Value = serde_json::from_str(line).expect(line);
+    }
+}
+
+#[test]
+fn cli_formula_flag_includes_formula_text() {
+    let dir = TempDir::new().unwrap();
+    let _ = super::common::write_formula_xlsx(dir.path());
+    let (stdout, _, code) = run_xgrep(dir.path(), &["--formula", "SUM", "--color", "never"]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("[formula]"));
+    assert!(stdout.contains("SUM"));
+}
