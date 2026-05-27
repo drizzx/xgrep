@@ -39,11 +39,20 @@ pub enum MatchEvent {
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Submatch {
-    /// 0-indexed Unicode character offset, half-open [start, end).
+    /// rg-compatible: `"match": {"text": "..."}`.
+    #[serde(rename = "match")]
+    pub matched: SubmatchText,
+    /// 0-indexed Unicode character offset (inclusive).
     pub start: usize,
+    /// 0-indexed Unicode character offset (exclusive).
     pub end: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SubmatchText {
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize)]
@@ -60,11 +69,17 @@ pub struct FileBlock {
 }
 
 /// Convert a regex byte range (matcher returns bytes) into a 0-indexed Unicode
-/// character range over the same haystack.
+/// character range with the matched substring captured.
 pub fn bytes_to_char_range(haystack: &str, start_b: usize, end_b: usize) -> Submatch {
     let start = haystack[..start_b].chars().count();
     let end = start + haystack[start_b..end_b].chars().count();
-    Submatch { start, end }
+    Submatch {
+        matched: SubmatchText {
+            text: haystack[start_b..end_b].to_owned(),
+        },
+        start,
+        end,
+    }
 }
 
 use crate::matcher::Pattern;
@@ -147,16 +162,16 @@ mod tests {
         let sm = bytes_to_char_range(s, 6, 11);
         assert_eq!(sm.start, 6);
         assert_eq!(sm.end, 11);
+        assert_eq!(sm.matched.text, "world");
     }
 
     #[test]
     fn bytes_to_char_cjk() {
-        // "张三" = 6 bytes (3 each), 2 chars
         let s = "abc张三def";
-        // Match "张三" at bytes 3..9 -> chars 3..5
         let sm = bytes_to_char_range(s, 3, 9);
         assert_eq!(sm.start, 3);
         assert_eq!(sm.end, 5);
+        assert_eq!(sm.matched.text, "张三");
     }
 
     #[test]
@@ -174,11 +189,18 @@ mod tests {
             cell: "B3".into(),
             layer: Layer::Display.as_str().into(),
             text: "张三".into(),
-            submatches: vec![Submatch { start: 0, end: 2 }],
+            submatches: vec![Submatch {
+                matched: SubmatchText {
+                    text: "张三".into(),
+                },
+                start: 0,
+                end: 2,
+            }],
         };
         let json = serde_json::to_string(&ev).unwrap();
         assert!(json.contains("\"type\":\"match\""));
         assert!(json.contains("\"data\":"));
+        assert!(json.contains("\"match\":{\"text\":\"张三\"}"));
         assert!(json.contains("\"cell\":\"B3\""));
         assert!(json.contains("\"layer\":\"display\""));
     }

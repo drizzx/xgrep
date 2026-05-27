@@ -32,7 +32,7 @@ pub fn walk_xlsx(roots: &[PathBuf], file_glob: Option<&Glob>) -> Result<Vec<Path
         let path = entry.into_path();
         if path
             .extension()
-            .map(|e| e.eq_ignore_ascii_case("xlsx"))
+            .map(|e| e.eq_ignore_ascii_case("xlsx") || e.eq_ignore_ascii_case("xlsm"))
             .unwrap_or(false)
         {
             if let Some(m) = &matcher {
