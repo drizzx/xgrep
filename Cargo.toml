@@ -40,6 +40,11 @@ insta = { version = "1", features = ["yaml"] }
 predicates = "3"
 tempfile = "3"
 rust_xlsxwriter = "0.79"
+criterion = "0.5"
+
+[[bench]]
+name = "search"
+harness = false
 
 [profile.release]
 lto = "thin"
