@@ -161,7 +161,31 @@ fn cmd_gen_benches() -> Result<()> {
 }
 
 fn cmd_list_fixtures() -> Result<()> {
-    bail!("list-fixtures not yet implemented (Task 6)")
+    let fixtures = load_fixtures()?;
+    let root = out_root();
+    println!("{:<24} {:>12}  {}", "name", "size", "path");
+    println!("{}", "-".repeat(70));
+    for f in &fixtures {
+        let path = if f.files > 0 {
+            root.join(&f.name)
+        } else {
+            root.join(format!("{}.xlsx", f.name))
+        };
+        let size = if !path.exists() {
+            "MISSING".to_string()
+        } else if f.files > 0 {
+            let mut total: u64 = 0;
+            for entry in std::fs::read_dir(&path)? {
+                let entry = entry?;
+                total += entry.metadata()?.len();
+            }
+            format!("{} KB", total / 1024)
+        } else {
+            format!("{} KB", std::fs::metadata(&path)?.len() / 1024)
+        };
+        println!("{:<24} {:>12}  {}", f.name, size, path.display());
+    }
+    Ok(())
 }
 
 fn cmd_measure_memory(_args: Vec<String>) -> Result<()> {
