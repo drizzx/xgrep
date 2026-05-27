@@ -6,6 +6,8 @@ pub mod cells;
 pub mod comments;
 pub mod fast_path;
 pub mod hidden;
+#[cfg(debug_assertions)]
+pub mod oracle;
 pub mod sst;
 pub mod zip_index;
 
