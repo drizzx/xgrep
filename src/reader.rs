@@ -47,14 +47,18 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
     let sheets = workbook.sheets_metadata().to_vec();
     let mut out = Vec::new();
 
-    let path_lookup: std::collections::HashMap<String, String> =
-        sheet_xml_paths(path).unwrap_or_default().into_iter().collect();
+    let path_lookup: std::collections::HashMap<String, String> = sheet_xml_paths(path)
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
 
     for sheet_meta in &sheets {
         let name = &sheet_meta.name;
 
         if let Some(filter) = &opts.sheet_filter {
-            if !filter.is_match(name) { continue; }
+            if !filter.is_match(name) {
+                continue;
+            }
         }
         if !opts.include_hidden && !matches!(sheet_meta.visible, calamine::SheetVisible::Visible) {
             continue;
@@ -62,11 +66,14 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
 
         let range = workbook
             .worksheet_range(name)
-            .map_err(|e| SearchError::Sheet { sheet: name.clone(), msg: e.to_string() })?;
+            .map_err(|e| SearchError::Sheet {
+                sheet: name.clone(),
+                msg: e.to_string(),
+            })?;
         let formulas = workbook.worksheet_formula(name).ok();
 
         let wants_formula = opts.layers.contains(LayerSet::FORMULA);
-        let wants_cached  = opts.layers.contains(LayerSet::CACHED);
+        let wants_cached = opts.layers.contains(LayerSet::CACHED);
         let wants_display = opts.layers.contains(LayerSet::DISPLAY);
 
         let (hidden_rows, hidden_cols) = if opts.include_hidden {
@@ -78,24 +85,33 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
         };
 
         for (row, col, data) in range.cells() {
-            if data.is_empty() { continue; }
+            if data.is_empty() {
+                continue;
+            }
             if !opts.include_hidden {
-                if hidden_rows.contains(&(row as u32)) { continue; }
-                if hidden_cols.contains(&(col as u32)) { continue; }
+                if hidden_rows.contains(&(row as u32)) {
+                    continue;
+                }
+                if hidden_cols.contains(&(col as u32)) {
+                    continue;
+                }
             }
             let a1 = to_a1(row as u32, col as u32);
 
             // Look up formula text for this (row, col). calamine 0.26's Range::get_value
             // takes a (u32, u32) tuple of position. The formula range parallels the
             // cell range and returns an empty String for non-formula cells.
-            let formula_text: Option<String> = formulas.as_ref()
+            let formula_text: Option<String> = formulas
+                .as_ref()
                 .and_then(|f| f.get_value((row as u32, col as u32)).cloned())
                 .filter(|s| !s.is_empty());
 
             if let Some(ftxt) = formula_text {
                 if wants_formula {
                     out.push(CellRecord {
-                        sheet: name.clone(), cell: a1.clone(), layer: Layer::Formula,
+                        sheet: name.clone(),
+                        cell: a1.clone(),
+                        layer: Layer::Formula,
                         text: ftxt,
                     });
                 }
@@ -103,7 +119,9 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
                     let cached = display_value(data);
                     if !cached.is_empty() {
                         out.push(CellRecord {
-                            sheet: name.clone(), cell: a1, layer: Layer::Cached,
+                            sheet: name.clone(),
+                            cell: a1,
+                            layer: Layer::Cached,
                             text: cached,
                         });
                     }
@@ -112,7 +130,9 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
                 let text = display_value(data);
                 if !text.is_empty() {
                     out.push(CellRecord {
-                        sheet: name.clone(), cell: a1, layer: Layer::Display,
+                        sheet: name.clone(),
+                        cell: a1,
+                        layer: Layer::Display,
                         text,
                     });
                 }
@@ -120,17 +140,27 @@ pub fn read_cells(path: &Path, opts: &ReaderOptions) -> Result<Vec<CellRecord>, 
         }
     }
     if opts.layers.contains(LayerSet::COMMENT) {
-        let visible_sheets: std::collections::HashSet<String> = sheets.iter()
+        let visible_sheets: std::collections::HashSet<String> = sheets
+            .iter()
             .filter(|m| matches!(m.visible, calamine::SheetVisible::Visible))
             .map(|m| m.name.clone())
             .collect();
         let comments = extract_comments(path).unwrap_or_default();
         for (sheet, cell, text) in comments {
             if let Some(filter) = &opts.sheet_filter {
-                if !filter.is_match(&sheet) { continue; }
+                if !filter.is_match(&sheet) {
+                    continue;
+                }
             }
-            if !opts.include_hidden && !visible_sheets.contains(&sheet) { continue; }
-            out.push(CellRecord { sheet, cell, layer: Layer::Comment, text });
+            if !opts.include_hidden && !visible_sheets.contains(&sheet) {
+                continue;
+            }
+            out.push(CellRecord {
+                sheet,
+                cell,
+                layer: Layer::Comment,
+                text,
+            });
         }
     }
     Ok(out)
@@ -194,8 +224,8 @@ use std::io::Read;
 fn sheet_xml_paths(path: &std::path::Path) -> Result<Vec<(String, String)>, SearchError> {
     use std::collections::HashMap;
     let file = std::fs::File::open(path).map_err(SearchError::Io)?;
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
+    let mut zip =
+        zip::ZipArchive::new(file).map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
 
     let mut s = String::new();
     zip.by_name("xl/workbook.xml")
@@ -220,7 +250,8 @@ fn sheet_xml_paths(path: &std::path::Path) -> Result<Vec<(String, String)>, Sear
     if let Ok(mut f) = zip.by_name("xl/_rels/workbook.xml.rels") {
         f.read_to_string(&mut rels)?;
     }
-    let re_rel = regex::Regex::new(r#"<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)""#).unwrap();
+    let re_rel =
+        regex::Regex::new(r#"<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)""#).unwrap();
     let mut rid_to_target: HashMap<String, String> = HashMap::new();
     for cap in re_rel.captures_iter(&rels) {
         rid_to_target.insert(cap[1].to_string(), cap[2].to_string());
@@ -228,7 +259,9 @@ fn sheet_xml_paths(path: &std::path::Path) -> Result<Vec<(String, String)>, Sear
     Ok(rids
         .into_iter()
         .filter_map(|(name, rid)| {
-            rid_to_target.get(&rid).map(|t| (name, format!("xl/{}", t.trim_start_matches('/'))))
+            rid_to_target
+                .get(&rid)
+                .map(|t| (name, format!("xl/{}", t.trim_start_matches('/'))))
         })
         .collect())
 }
@@ -237,14 +270,13 @@ fn sheet_xml_paths(path: &std::path::Path) -> Result<Vec<(String, String)>, Sear
 /// Returns Vec<(sheet_name, cell_a1, text)>.
 fn extract_comments(path: &std::path::Path) -> Result<Vec<(String, String, String)>, SearchError> {
     let file = std::fs::File::open(path).map_err(SearchError::Io)?;
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
+    let mut zip =
+        zip::ZipArchive::new(file).map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
 
     let sheets = sheet_xml_paths(path)?;
     let mut out = Vec::new();
-    let re_comment = regex::Regex::new(
-        r#"<comment[^>]*ref="([^"]+)"[^>]*>([\s\S]*?)</comment>"#
-    ).unwrap();
+    let re_comment =
+        regex::Regex::new(r#"<comment[^>]*ref="([^"]+)"[^>]*>([\s\S]*?)</comment>"#).unwrap();
     let re_t = regex::Regex::new(r#"<t[^>]*>([\s\S]*?)</t>"#).unwrap();
     let re_comments_target = regex::Regex::new(r#"Target="([^"]*comments[^"]+\.xml)""#).unwrap();
 
@@ -255,9 +287,12 @@ fn extract_comments(path: &std::path::Path) -> Result<Vec<(String, String, Strin
         let mut rels = String::new();
         if let Ok(mut f) = zip.by_name(&rels_path) {
             f.read_to_string(&mut rels)?;
-        } else { continue; }
-        let Some(cap) = re_comments_target.captures(&rels)
-        else { continue; };
+        } else {
+            continue;
+        }
+        let Some(cap) = re_comments_target.captures(&rels) else {
+            continue;
+        };
         let target = cap[1].to_string();
         // Targets like "../comments1.xml" → resolve to "xl/comments1.xml"
         // Targets like "comments1.xml" → resolve to "xl/worksheets/comments1.xml"
@@ -269,12 +304,15 @@ fn extract_comments(path: &std::path::Path) -> Result<Vec<(String, String, Strin
         let mut comments_xml = String::new();
         if let Ok(mut f) = zip.by_name(&comments_path) {
             f.read_to_string(&mut comments_xml)?;
-        } else { continue; }
+        } else {
+            continue;
+        }
 
         for cap in re_comment.captures_iter(&comments_xml) {
             let cell = cap[1].to_string();
             let body = &cap[2];
-            let text: String = re_t.captures_iter(body)
+            let text: String = re_t
+                .captures_iter(body)
                 .map(|c| xml_unescape(&c[1]))
                 .collect::<Vec<_>>()
                 .join("");
@@ -289,7 +327,10 @@ fn extract_comments(path: &std::path::Path) -> Result<Vec<(String, String, Strin
 fn hidden_row_col_for_sheet(
     path: &std::path::Path,
     sheet_xml_zip_path: &str,
-) -> (std::collections::HashSet<u32>, std::collections::HashSet<u32>) {
+) -> (
+    std::collections::HashSet<u32>,
+    std::collections::HashSet<u32>,
+) {
     use std::collections::HashSet;
     let mut hidden_rows = HashSet::new();
     let mut hidden_cols = HashSet::new();
@@ -311,11 +352,14 @@ fn hidden_row_col_for_sheet(
             hidden_rows.insert(n.saturating_sub(1));
         }
     }
-    let re_col = regex::Regex::new(r#"<col[^>]*min="(\d+)"[^>]*max="(\d+)"[^>]*hidden="1""#).unwrap();
+    let re_col =
+        regex::Regex::new(r#"<col[^>]*min="(\d+)"[^>]*max="(\d+)"[^>]*hidden="1""#).unwrap();
     for cap in re_col.captures_iter(&xml) {
         let lo: u32 = cap[1].parse().unwrap_or(1);
         let hi: u32 = cap[2].parse().unwrap_or(lo);
-        for c in lo..=hi { hidden_cols.insert(c.saturating_sub(1)); }
+        for c in lo..=hi {
+            hidden_cols.insert(c.saturating_sub(1));
+        }
     }
     (hidden_rows, hidden_cols)
 }

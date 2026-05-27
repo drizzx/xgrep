@@ -30,8 +30,13 @@ fn print_pretty(
 ) -> io::Result<()> {
     use termcolor::{Ansi, Color, ColorSpec, NoColor, WriteColor};
 
-    let has_match = block.events.iter().any(|e| matches!(e, MatchEvent::Match { .. }));
-    if !has_match { return Ok(()); }
+    let has_match = block
+        .events
+        .iter()
+        .any(|e| matches!(e, MatchEvent::Match { .. }));
+    if !has_match {
+        return Ok(());
+    }
 
     fn render<W: WriteColor>(
         out: &mut W,
@@ -60,26 +65,41 @@ fn print_pretty(
                     writeln!(out, "{}", path.display())?;
                     out.reset()?;
                 }
-                MatchEvent::Match { sheet, cell, layer, text, submatches, .. } => {
+                MatchEvent::Match {
+                    sheet,
+                    cell,
+                    layer,
+                    text,
+                    submatches,
+                    ..
+                } => {
                     let offset = submatches.first().map(|s| s.start + 1).unwrap_or(1);
                     write!(out, "  ")?;
-                    out.set_color(&sheet_spec)?; write!(out, "{sheet}")?;
-                    out.reset()?; write!(out, "!")?;
-                    out.set_color(&cell_spec)?;  write!(out, "{cell}")?;
-                    out.reset()?; write!(out, ":{offset}: ")?;
+                    out.set_color(&sheet_spec)?;
+                    write!(out, "{sheet}")?;
+                    out.reset()?;
+                    write!(out, "!")?;
+                    out.set_color(&cell_spec)?;
+                    write!(out, "{cell}")?;
+                    out.reset()?;
+                    write!(out, ":{offset}: ")?;
 
                     // Highlight match substrings within text. submatches use char offsets.
                     let mut pos = 0;
                     for sm in submatches {
                         let start_b = char_index_to_byte(text, sm.start);
                         let end_b = char_index_to_byte(text, sm.end);
-                        if start_b > pos { out.write_all(&text.as_bytes()[pos..start_b])?; }
+                        if start_b > pos {
+                            out.write_all(&text.as_bytes()[pos..start_b])?;
+                        }
                         out.set_color(&match_spec)?;
                         out.write_all(&text.as_bytes()[start_b..end_b])?;
                         out.reset()?;
                         pos = end_b;
                     }
-                    if pos < text.len() { out.write_all(&text.as_bytes()[pos..])?; }
+                    if pos < text.len() {
+                        out.write_all(&text.as_bytes()[pos..])?;
+                    }
 
                     if layer != "display" || force_layer_tag {
                         out.set_color(&tag_spec)?;
@@ -116,7 +136,10 @@ fn print_pretty(
 }
 
 fn char_index_to_byte(s: &str, char_idx: usize) -> usize {
-    s.char_indices().nth(char_idx).map(|(b, _)| b).unwrap_or(s.len())
+    s.char_indices()
+        .nth(char_idx)
+        .map(|(b, _)| b)
+        .unwrap_or(s.len())
 }
 
 fn print_json(block: &FileBlock, out: &mut impl Write) -> io::Result<()> {
@@ -146,8 +169,13 @@ fn print_count(block: &FileBlock, out: &mut impl Write) -> io::Result<()> {
 }
 
 fn print_files_with_matches(block: &FileBlock, out: &mut impl Write) -> io::Result<()> {
-    let has_match = block.events.iter().any(|e| matches!(e, MatchEvent::Match { .. }));
-    if !has_match { return Ok(()); }
+    let has_match = block
+        .events
+        .iter()
+        .any(|e| matches!(e, MatchEvent::Match { .. }));
+    if !has_match {
+        return Ok(());
+    }
     if let Some(MatchEvent::FileBegin { path }) = block.events.first() {
         writeln!(out, "{}", path.display())?;
     }

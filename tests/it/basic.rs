@@ -21,7 +21,12 @@ fn reader_emits_display_values_for_strings_and_numbers() {
     assert!(got.contains(&("Sheet1".into(), "A1".into(), Layer::Display, "name".into())));
     assert!(got.contains(&("Sheet1".into(), "A2".into(), Layer::Display, "张三".into())));
     assert!(got.contains(&("Sheet1".into(), "B2".into(), Layer::Display, "100".into())));
-    assert!(got.contains(&("汇总".into(), "A1".into(), Layer::Display, "张三应收账款".into())));
+    assert!(got.contains(&(
+        "汇总".into(),
+        "A1".into(),
+        Layer::Display,
+        "张三应收账款".into()
+    )));
 }
 
 #[test]
@@ -42,9 +47,9 @@ fn sheet_glob_excludes_unmatched_sheets() {
 
 #[test]
 fn search_file_emits_file_block_with_matches() {
-    use xgrep::{search_file, FileBlock, MatchEvent};
     use xgrep::config::LayerSet;
     use xgrep::matcher::{CaseMode, Pattern};
+    use xgrep::{search_file, FileBlock, MatchEvent};
 
     let dir = TempDir::new().unwrap();
     let path = write_basic_xlsx(dir.path());
@@ -57,18 +62,33 @@ fn search_file_emits_file_block_with_matches() {
     };
     let block: FileBlock = search_file(&path, &pat, &opts, false);
 
-    let matches: Vec<_> = block.events.iter()
+    let matches: Vec<_> = block
+        .events
+        .iter()
         .filter_map(|e| match e {
-            MatchEvent::Match { sheet, cell, layer, text, .. } =>
-                Some((sheet.clone(), cell.clone(), layer.clone(), text.clone())),
+            MatchEvent::Match {
+                sheet,
+                cell,
+                layer,
+                text,
+                ..
+            } => Some((sheet.clone(), cell.clone(), layer.clone(), text.clone())),
             _ => None,
         })
         .collect();
 
-    assert!(matches.iter().any(|(s, c, _, _)| s == "Sheet1" && c == "A2"));
+    assert!(matches
+        .iter()
+        .any(|(s, c, _, _)| s == "Sheet1" && c == "A2"));
     assert!(matches.iter().any(|(s, c, _, _)| s == "汇总" && c == "A1"));
-    assert!(matches!(block.events.first(), Some(MatchEvent::FileBegin { .. })));
-    assert!(matches!(block.events.last(), Some(MatchEvent::FileEnd { .. })));
+    assert!(matches!(
+        block.events.first(),
+        Some(MatchEvent::FileBegin { .. })
+    ));
+    assert!(matches!(
+        block.events.last(),
+        Some(MatchEvent::FileEnd { .. })
+    ));
 }
 
 #[test]
@@ -96,8 +116,14 @@ fn worker_runs_files_in_parallel_and_emits_one_block_per_file() {
 
     assert_eq!(blocks.len(), paths.len());
     for b in &blocks {
-        assert!(matches!(b.events.first(), Some(xgrep::MatchEvent::FileBegin { .. })));
-        assert!(matches!(b.events.last(), Some(xgrep::MatchEvent::FileEnd { .. })));
+        assert!(matches!(
+            b.events.first(),
+            Some(xgrep::MatchEvent::FileBegin { .. })
+        ));
+        assert!(matches!(
+            b.events.last(),
+            Some(xgrep::MatchEvent::FileEnd { .. })
+        ));
     }
 }
 
@@ -117,5 +143,7 @@ fn walker_finds_xlsx_files_recursively_and_skips_others() {
     let mut found: Vec<_> = walk_xlsx(&[dir.path().to_path_buf()], None).unwrap();
     found.sort();
     assert_eq!(found.len(), 2);
-    assert!(found.iter().all(|p| p.extension().map(|e| e == "xlsx").unwrap_or(false)));
+    assert!(found
+        .iter()
+        .all(|p| p.extension().map(|e| e == "xlsx").unwrap_or(false)));
 }

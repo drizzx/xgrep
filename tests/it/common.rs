@@ -59,7 +59,9 @@ pub fn write_hidden_xlsx(dir: &Path) -> PathBuf {
     visible.write_string(0, 2, "hidden-col-marker").unwrap();
 
     let hidden_sheet = wb.add_worksheet().set_name("HiddenSheet").unwrap();
-    hidden_sheet.write_string(0, 0, "hidden-sheet-marker").unwrap();
+    hidden_sheet
+        .write_string(0, 0, "hidden-sheet-marker")
+        .unwrap();
     hidden_sheet.set_hidden(true);
     wb.save(&path).unwrap();
     path
@@ -111,10 +113,8 @@ pub fn write_richtext_xlsx(dir: &Path) -> PathBuf {
     let mut wb = Workbook::new();
     let s = wb.add_worksheet().set_name("Sheet1").unwrap();
     let red = Format::new().set_font_color("red");
-    s.write_rich_string(
-        0, 0,
-        &[(&red, "张三"), (&Format::default(), "应收账款")],
-    ).unwrap();
+    s.write_rich_string(0, 0, &[(&red, "张三"), (&Format::default(), "应收账款")])
+        .unwrap();
     wb.save(&path).unwrap();
     path
 }
@@ -124,7 +124,8 @@ pub fn write_merged_xlsx(dir: &Path) -> PathBuf {
     let path = dir.join("merged.xlsx");
     let mut wb = Workbook::new();
     let s = wb.add_worksheet().set_name("Sheet1").unwrap();
-    s.merge_range(0, 0, 1, 1, "merged-anchor", &Format::default()).unwrap();
+    s.merge_range(0, 0, 1, 1, "merged-anchor", &Format::default())
+        .unwrap();
     wb.save(&path).unwrap();
     path
 }
@@ -134,7 +135,8 @@ use assert_cmd::Command;
 /// Run the compiled `xgrep` binary with the given args inside `cwd`.
 /// Returns (stdout, stderr, exit_code).
 pub fn run_xgrep(cwd: &Path, args: &[&str]) -> (String, String, i32) {
-    let assert = Command::cargo_bin("xgrep").unwrap()
+    let assert = Command::cargo_bin("xgrep")
+        .unwrap()
         .current_dir(cwd)
         .args(args)
         .env("NO_COLOR", "1")

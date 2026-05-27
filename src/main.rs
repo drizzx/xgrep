@@ -19,7 +19,7 @@ use xgrep::MatchEvent;
     name = "xgrep",
     version,
     about = "Excel-aware grep — search .xlsx files with rg-style UX",
-    arg_required_else_help = true,
+    arg_required_else_help = true
 )]
 struct Cli {
     /// Regex pattern.
@@ -47,16 +47,27 @@ struct Cli {
 
     #[arg(short = 'c', long, help = "Print path:count per matching file")]
     count: bool,
-    #[arg(short = 'l', long = "files-with-matches", help = "Print only paths of matching files")]
+    #[arg(
+        short = 'l',
+        long = "files-with-matches",
+        help = "Print only paths of matching files"
+    )]
     files_with_matches: bool,
     #[arg(long, help = "Stream NDJSON events")]
     json: bool,
     #[arg(long, value_enum, default_value_t = ColorOpt::Auto)]
     color: ColorOpt,
-    #[arg(short = 'j', long = "threads", default_value_t = 0,
-          help = "Worker threads (0 = number of CPUs)")]
+    #[arg(
+        short = 'j',
+        long = "threads",
+        default_value_t = 0,
+        help = "Worker threads (0 = number of CPUs)"
+    )]
     threads: usize,
-    #[arg(long, help = "Glob to filter file paths, e.g. --glob 'reports/**/*.xlsx'")]
+    #[arg(
+        long,
+        help = "Glob to filter file paths, e.g. --glob 'reports/**/*.xlsx'"
+    )]
     glob: Option<String>,
 
     #[arg(long, help = "Search formula text (e.g. =SUM(...)) too")]
@@ -72,7 +83,11 @@ struct Cli {
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
-enum ColorOpt { Auto, Always, Never }
+enum ColorOpt {
+    Auto,
+    Always,
+    Never,
+}
 
 impl From<ColorOpt> for ColorChoice {
     fn from(c: ColorOpt) -> Self {
@@ -97,7 +112,10 @@ fn main() -> StdExit {
 
 fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     // Pattern: positional `pattern` + any number of `-e` flags. Combine as alternation.
-    let patterns: Vec<String> = cli.regexp.iter().cloned()
+    let patterns: Vec<String> = cli
+        .regexp
+        .iter()
+        .cloned()
         .chain(cli.pattern.clone())
         .collect();
     if patterns.is_empty() {
@@ -108,19 +126,29 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     } else {
         format!("(?:{})", patterns.join(")|(?:"))
     };
-    let case = if cli.ignore_case { CaseMode::Insensitive }
-        else if cli.case_sensitive { CaseMode::Sensitive }
-        else { CaseMode::Smart };
+    let case = if cli.ignore_case {
+        CaseMode::Insensitive
+    } else if cli.case_sensitive {
+        CaseMode::Sensitive
+    } else {
+        CaseMode::Smart
+    };
     let pattern = Pattern::compile(&joined, case, cli.fixed_strings, cli.word_regexp)
         .map_err(|e| anyhow::anyhow!("invalid regex: {e}"))?;
 
     let mut layers = LayerSet::DISPLAY | LayerSet::CACHED;
-    if !cli.no_comments { layers |= LayerSet::COMMENT; }
-    if cli.formula { layers |= LayerSet::FORMULA; }
+    if !cli.no_comments {
+        layers |= LayerSet::COMMENT;
+    }
+    if cli.formula {
+        layers |= LayerSet::FORMULA;
+    }
 
     let paths_in = if cli.paths.is_empty() {
         vec![PathBuf::from(".")]
-    } else { cli.paths.clone() };
+    } else {
+        cli.paths.clone()
+    };
     let file_glob = cli.glob.as_deref().map(Glob::new).transpose()?;
     let sheet_glob = cli.sheet.as_deref().map(Glob::new).transpose()?;
 
@@ -134,13 +162,28 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         include_hidden: !cli.no_hidden,
         sheet_filter: sheet_glob.as_ref().map(|g| g.compile_matcher()),
     };
-    let threads = if cli.threads == 0 { num_cpus().max(1) } else { cli.threads };
-    let blocks = run_search(xlsx_paths, &pattern, &reader_opts, cli.invert_match, threads);
+    let threads = if cli.threads == 0 {
+        num_cpus().max(1)
+    } else {
+        cli.threads
+    };
+    let blocks = run_search(
+        xlsx_paths,
+        &pattern,
+        &reader_opts,
+        cli.invert_match,
+        threads,
+    );
 
-    let output = if cli.json { OutputMode::Json }
-        else if cli.count { OutputMode::CountOnly }
-        else if cli.files_with_matches { OutputMode::FilesOnly }
-        else { OutputMode::Pretty };
+    let output = if cli.json {
+        OutputMode::Json
+    } else if cli.count {
+        OutputMode::CountOnly
+    } else if cli.files_with_matches {
+        OutputMode::FilesOnly
+    } else {
+        OutputMode::Pretty
+    };
 
     let color_choice: ColorChoice = cli.color.into();
     let effective_color = match color_choice {
@@ -178,5 +221,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
 }
 
 fn num_cpus() -> usize {
-    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
 }

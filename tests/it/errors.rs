@@ -14,7 +14,10 @@ fn encrypted_xlsx_emits_stderr_and_continues() {
         stderr.to_lowercase().contains("encrypted") || stderr.contains("encrypted"),
         "stderr should mention encryption: {stderr}"
     );
-    assert!(stdout.contains("basic.xlsx"), "still scans the good file: {stdout}");
+    assert!(
+        stdout.contains("basic.xlsx"),
+        "still scans the good file: {stdout}"
+    );
     assert_eq!(code, 0);
 }
 

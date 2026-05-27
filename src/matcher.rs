@@ -46,7 +46,10 @@ impl Pattern {
             .case_insensitive(insensitive)
             .unicode(true)
             .build()?;
-        Ok(Self { regex, raw: raw.to_owned() })
+        Ok(Self {
+            regex,
+            raw: raw.to_owned(),
+        })
     }
 
     pub fn is_match(&self, haystack: &str) -> bool {
@@ -58,7 +61,9 @@ impl Pattern {
         self.regex.find_iter(haystack).map(|m| (m.start(), m.end()))
     }
 
-    pub fn raw(&self) -> &str { &self.raw }
+    pub fn raw(&self) -> &str {
+        &self.raw
+    }
 }
 
 #[cfg(test)]

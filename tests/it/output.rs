@@ -18,18 +18,35 @@ fn search_basic(pattern: &str) -> FileBlock {
 fn pretty_output_groups_under_filename_with_sheet_cell_prefix() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Never, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::Pretty,
+        ColorChoice::Never,
+        false,
+    )
+    .unwrap();
     let out = String::from_utf8(buf).unwrap();
 
     assert!(out.contains("basic.xlsx\n"), "path header missing: {out}");
-    assert!(out.contains("Sheet1!A2:1: 张三"), "sheet/cell prefix missing: {out}");
+    assert!(
+        out.contains("Sheet1!A2:1: 张三"),
+        "sheet/cell prefix missing: {out}"
+    );
 }
 
 #[test]
 fn json_output_emits_ndjson_events() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::Json, ColorChoice::Never, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::Json,
+        ColorChoice::Never,
+        false,
+    )
+    .unwrap();
     let out = String::from_utf8(buf).unwrap();
 
     let lines: Vec<_> = out.lines().collect();
@@ -46,16 +63,33 @@ fn json_output_emits_ndjson_events() {
 fn count_output_emits_path_count_line() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::CountOnly, ColorChoice::Never, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::CountOnly,
+        ColorChoice::Never,
+        false,
+    )
+    .unwrap();
     let out = String::from_utf8(buf).unwrap();
-    assert!(out.trim().ends_with(":2"), "expected count of 2, got {out:?}");
+    assert!(
+        out.trim().ends_with(":2"),
+        "expected count of 2, got {out:?}"
+    );
 }
 
 #[test]
 fn files_with_matches_emits_path_only_for_matched_files() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::FilesOnly, ColorChoice::Never, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::FilesOnly,
+        ColorChoice::Never,
+        false,
+    )
+    .unwrap();
     let out = String::from_utf8(buf).unwrap();
     assert!(out.trim().ends_with("basic.xlsx"));
     assert!(!out.contains("Sheet1"));
@@ -65,12 +99,26 @@ fn files_with_matches_emits_path_only_for_matched_files() {
 fn pretty_output_layer_tag_omitted_for_display_unless_forced() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Never, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::Pretty,
+        ColorChoice::Never,
+        false,
+    )
+    .unwrap();
     let s = String::from_utf8(buf).unwrap();
     assert!(!s.contains("[display]"));
 
     let mut buf2 = Vec::new();
-    print_block(&block, &mut buf2, OutputMode::Pretty, ColorChoice::Never, true).unwrap();
+    print_block(
+        &block,
+        &mut buf2,
+        OutputMode::Pretty,
+        ColorChoice::Never,
+        true,
+    )
+    .unwrap();
     let s2 = String::from_utf8(buf2).unwrap();
     assert!(s2.contains("[display]"));
 }
@@ -79,16 +127,33 @@ fn pretty_output_layer_tag_omitted_for_display_unless_forced() {
 fn pretty_output_emits_ansi_when_color_always() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Always, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::Pretty,
+        ColorChoice::Always,
+        false,
+    )
+    .unwrap();
     let out = String::from_utf8(buf).unwrap();
-    assert!(out.contains('\x1b'), "expected ANSI escape in colored output");
+    assert!(
+        out.contains('\x1b'),
+        "expected ANSI escape in colored output"
+    );
 }
 
 #[test]
 fn pretty_output_omits_ansi_when_color_never() {
     let block = search_basic("张三");
     let mut buf = Vec::new();
-    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Never, false).unwrap();
+    print_block(
+        &block,
+        &mut buf,
+        OutputMode::Pretty,
+        ColorChoice::Never,
+        false,
+    )
+    .unwrap();
     let out = String::from_utf8(buf).unwrap();
     assert!(!out.contains('\x1b'));
 }

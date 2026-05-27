@@ -28,7 +28,12 @@ impl LayerSet {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Layer { Display, Cached, Formula, Comment }
+pub enum Layer {
+    Display,
+    Cached,
+    Formula,
+    Comment,
+}
 
 impl Layer {
     pub fn as_str(self) -> &'static str {
@@ -42,10 +47,19 @@ impl Layer {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputMode { Pretty, Json, CountOnly, FilesOnly }
+pub enum OutputMode {
+    Pretty,
+    Json,
+    CountOnly,
+    FilesOnly,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColorChoice { Auto, Always, Never }
+pub enum ColorChoice {
+    Auto,
+    Always,
+    Never,
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {

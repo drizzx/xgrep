@@ -9,26 +9,34 @@ pub mod reader;
 pub mod walker;
 pub mod worker;
 
-use std::path::PathBuf;
 use serde::Serialize;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum MatchEvent {
     /// `{"type":"begin","data":{"path":...}}` per spec §4.5
     #[serde(rename = "begin")]
-    FileBegin { path: PathBuf },
+    FileBegin {
+        path: PathBuf,
+    },
     Match {
         path: PathBuf,
         sheet: String,
-        cell: String,       // A1 notation
-        layer: String,      // Layer::as_str()
+        cell: String,  // A1 notation
+        layer: String, // Layer::as_str()
         text: String,
         submatches: Vec<Submatch>,
     },
     #[serde(rename = "end")]
-    FileEnd { path: PathBuf, stats: FileStats },
-    Error { path: PathBuf, message: String },
+    FileEnd {
+        path: PathBuf,
+        stats: FileStats,
+    },
+    Error {
+        path: PathBuf,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -47,7 +55,9 @@ pub struct FileStats {
 /// A FileBlock is the unit of atomic output: FileBegin .. Match* .. FileEnd
 /// (or an Error event in place of the body). Workers emit one per file.
 #[derive(Debug, Clone)]
-pub struct FileBlock { pub events: Vec<MatchEvent> }
+pub struct FileBlock {
+    pub events: Vec<MatchEvent>,
+}
 
 /// Convert a regex byte range (matcher returns bytes) into a 0-indexed Unicode
 /// character range over the same haystack.
@@ -71,7 +81,9 @@ pub fn search_file(
     reader_opts: &ReaderOptions,
     invert: bool,
 ) -> FileBlock {
-    let mut events = vec![MatchEvent::FileBegin { path: path.to_path_buf() }];
+    let mut events = vec![MatchEvent::FileBegin {
+        path: path.to_path_buf(),
+    }];
     let mut matches = 0u64;
     let mut sheets_seen: HashSet<String> = HashSet::new();
 
@@ -82,7 +94,9 @@ pub fn search_file(
                 let hits: Vec<_> = pattern.find_iter(&c.text).collect();
                 let has_hit = !hits.is_empty();
                 let emit = if invert { !has_hit } else { has_hit };
-                if !emit { continue; }
+                if !emit {
+                    continue;
+                }
                 let submatches = if invert {
                     Vec::new()
                 } else {
