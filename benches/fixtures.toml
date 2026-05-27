@@ -1,0 +1,58 @@
+# v0.2 bench fixture matrix. Edited by humans, consumed by `cargo xtask gen-benches`.
+# Each entry produces target/bench-fixtures/<name>.xlsx.
+# Fields:
+#   rows               u32      total rows per sheet
+#   sheets             u32      number of sheets (default 1)
+#   shared_strings     u32      total unique strings in the sst pool (default rows / 10)
+#   formula_pct        f32      fraction [0,1] of cells that are formulas (default 0)
+#   inline_strings_pct f32      fraction [0,1] of cells that use inline strings (default 0)
+#   hit_density        f32      fraction [0,1] of sst entries that contain a hit token ("HIT")
+#                                used to color the "low-hit" vs "high-hit" buckets (default 0)
+
+[[fixture]]
+name = "sst_heavy_low_hit"
+rows = 200_000
+sheets = 3
+shared_strings = 50_000
+hit_density = 0.001
+description = "Large file, lots of t='s' cells, pattern hits very few sst entries -> fast-path A main case."
+
+[[fixture]]
+name = "sst_heavy_high_hit"
+rows = 200_000
+sheets = 3
+shared_strings = 50_000
+hit_density = 0.5
+description = "Large file, pattern hits half of sst -> fast-path startup overhead must stay near zero."
+
+[[fixture]]
+name = "formula_heavy"
+rows = 50_000
+sheets = 2
+formula_pct = 0.8
+hit_density = 0.0
+description = "Mostly formulas, big sheet xml, sst tiny -> fast-path B main case."
+
+[[fixture]]
+name = "inline_strings_heavy"
+rows = 50_000
+sheets = 2
+inline_strings_pct = 1.0
+hit_density = 0.0
+description = "All inline strings (no sst) -> fast-path B carries the optimization alone."
+
+# many_small is not a single .xlsx — gen-benches will produce a directory
+# `target/bench-fixtures/many_small/` containing N files when `files` is set.
+[[fixture]]
+name = "many_small"
+files = 100
+rows = 5_000
+shared_strings = 500
+hit_density = 0.01
+description = "100 small files exercising file-level parallelism + per-file fast-path startup."
+
+# Smoke fixture used by the harness compile-test in Task 2. Trivially small.
+[[fixture]]
+name = "smoke"
+rows = 10
+description = "Tiny fixture used only to verify the bench harness compiles + loads."
