@@ -4,6 +4,8 @@
 //! - All fixtures live in tempdirs unless they are committed binaries
 //!   (encrypted/corrupt — see tests/fixtures/).
 
+#![allow(dead_code)] // helpers are picked up incrementally by later task tests
+
 use std::path::{Path, PathBuf};
 
 use rust_xlsxwriter::Workbook;
