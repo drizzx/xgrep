@@ -15,5 +15,7 @@ mod formulas;
 mod hidden;
 #[path = "it/output.rs"]
 mod output;
+#[path = "it/perf_oracle.rs"]
+mod perf_oracle;
 #[path = "it/sst.rs"]
 mod sst;
