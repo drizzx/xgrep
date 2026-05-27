@@ -7,7 +7,6 @@ pub mod matcher;
 
 use std::path::PathBuf;
 use serde::Serialize;
-use crate::config::Layer;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
@@ -57,6 +56,7 @@ pub fn bytes_to_char_range(haystack: &str, start_b: usize, end_b: usize) -> Subm
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Layer;
 
     #[test]
     fn bytes_to_char_ascii() {
