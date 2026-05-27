@@ -2,6 +2,8 @@
 //! (sheet, cell, layer) tuple matched by the configured `LayerSet` /
 //! `include_hidden` flags.
 
+pub mod zip_index;
+
 use std::path::Path;
 
 use calamine::{open_workbook, Data, DataType, Reader, Xlsx};
