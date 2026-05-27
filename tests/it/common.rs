@@ -77,6 +77,21 @@ pub fn write_comment_xlsx(dir: &Path) -> PathBuf {
     path
 }
 
+pub fn write_empty_xlsx(dir: &Path) -> PathBuf {
+    let path = dir.join("empty.xlsx");
+    let mut wb = Workbook::new();
+    wb.add_worksheet().set_name("Sheet1").unwrap();
+    wb.save(&path).unwrap();
+    path
+}
+
+pub fn fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
 use assert_cmd::Command;
 
 /// Run the compiled `xgrep` binary with the given args inside `cwd`.
