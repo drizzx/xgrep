@@ -16,6 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 calamine = "0.26"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 regex = "1.10"
 ignore = "0.4"
 termcolor = "1.4"
