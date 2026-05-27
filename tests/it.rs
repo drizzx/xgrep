@@ -5,6 +5,8 @@ mod common;
 mod basic;
 #[path = "it/comments.rs"]
 mod comments;
+#[path = "it/env_disable.rs"]
+mod env_disable;
 #[path = "it/errors.rs"]
 mod errors;
 #[path = "it/extras.rs"]

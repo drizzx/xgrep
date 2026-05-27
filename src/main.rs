@@ -157,12 +157,16 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         return Ok(ExitCode::NoMatch);
     }
 
+    let disable_fast_path = std::env::var_os("XGREP_DISABLE_FAST_PATH")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+
     let reader_opts = ReaderOptions {
         layers,
         include_hidden: !cli.no_hidden,
         sheet_filter: sheet_glob.as_ref().map(|g| g.compile_matcher()),
         pattern: None,
-        disable_fast_path: false,
+        disable_fast_path,
     };
     let threads = if cli.threads == 0 {
         num_cpus().max(1)
