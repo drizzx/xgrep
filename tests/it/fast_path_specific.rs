@@ -127,3 +127,69 @@ fn anchored_pattern_handled_conservatively() {
     assert_eq!(r, vec!["foo".to_string()]);
     assert_eq!(r, matches(&p, "^foo$", true));
 }
+
+#[test]
+fn preskip_sst_falls_back_safely_when_pattern_is_rare() {
+    // Constructs a workbook with the SHAPE that triggers preskip
+    // (large compressed sst, 3 sheets) but with a pattern that
+    // matches only a single sst entry. The preskip path skips sst::parse
+    // and routes through calamine; the disable_fast_path path also routes
+    // through calamine. Both must yield the SAME match set — preskip must
+    // not produce false negatives.
+    use xgrep::reader::{read_cells, ReaderOptions};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("preskip_sparse.xlsx");
+
+    // Build a workbook with a large sst (> 100KB compressed) and 3 sheets.
+    // We achieve this by writing ~24,000 distinct strings across 3 sheets.
+    // Only ONE string contains the target marker — the rest are unique noise.
+    let mut wb = Workbook::new();
+    let sheet_count = 3usize;
+    let per_sheet_rows = 8_000usize;
+    for sheet_idx in 0..sheet_count {
+        let s = wb.add_worksheet().set_name(&format!("Sheet{}", sheet_idx + 1)).unwrap();
+        for row in 0..per_sheet_rows {
+            // Unique string per cell, only one match in total.
+            let value = if sheet_idx == 1 && row == 4242 {
+                "RARE-MATCH-MARKER".to_string()
+            } else {
+                format!("noise-{sheet_idx}-{row}-padding-to-bulk-up-sst")
+            };
+            s.write_string(row as u32, 0, &value).unwrap();
+        }
+    }
+    wb.save(&path).unwrap();
+
+    let pat = Pattern::compile("RARE-MATCH-MARKER", CaseMode::Sensitive, true, false).unwrap();
+
+    // Fast-path ON (default) — should hit preskip given workbook shape.
+    let opts_on = ReaderOptions {
+        pattern: Some(&pat),
+        ..ReaderOptions::default()
+    };
+    let cells_on = read_cells(&path, &opts_on).unwrap();
+    let matches_on: Vec<_> = cells_on
+        .iter()
+        .filter(|c| c.text.contains("RARE-MATCH-MARKER"))
+        .collect();
+
+    // Fast-path OFF — baseline.
+    let opts_off = ReaderOptions {
+        pattern: Some(&pat),
+        disable_fast_path: true,
+        ..ReaderOptions::default()
+    };
+    let cells_off = read_cells(&path, &opts_off).unwrap();
+    let matches_off: Vec<_> = cells_off
+        .iter()
+        .filter(|c| c.text.contains("RARE-MATCH-MARKER"))
+        .collect();
+
+    // Both paths must yield exactly one match at Sheet2 cell A4243.
+    assert_eq!(matches_on.len(), 1, "fast-path on: expected 1 match, got {}", matches_on.len());
+    assert_eq!(matches_off.len(), 1, "fast-path off: expected 1 match, got {}", matches_off.len());
+    assert_eq!(matches_on[0].sheet, "Sheet2");
+    assert_eq!(matches_off[0].sheet, "Sheet2");
+    assert_eq!(matches_on[0].text, matches_off[0].text);
+}
