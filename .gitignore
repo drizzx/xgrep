@@ -4,3 +4,4 @@ Cargo.lock.bak
 .idea/
 .vscode/
 *.snap.new
+/bench_output_*.txt
