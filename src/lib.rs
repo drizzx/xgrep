@@ -176,9 +176,12 @@ pub fn search_file(
                     let has_hit = pattern.find_iter(&c.text).next().is_some();
                     let is_match = if invert { !has_hit } else { has_hit };
                     if is_match {
+                        matches += 1;
+                        // Only register as a context anchor if we can parse the row. Matches
+                        // on cells with unparseable addresses still get counted (here) but
+                        // can't participate in row-context expansion in Pass 2/3.
                         if let Some(r) = crate::cell::row_from_a1(&c.cell) {
                             match_rows.push((c.sheet.clone(), r));
-                            matches += 1;
                         }
                     }
                 }

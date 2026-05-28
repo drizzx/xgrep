@@ -153,12 +153,15 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     }
 
     const CONTEXT_MAX: u32 = 10_000;
-    if cli.after_context > CONTEXT_MAX
-        || cli.before_context > CONTEXT_MAX
-        || cli.context > CONTEXT_MAX
-    {
-        eprintln!("xgrep: context value out of range (max {CONTEXT_MAX})");
-        return Ok(ExitCode::Fatal);
+    for (name, val) in [
+        ("--after-context (-A)", cli.after_context),
+        ("--before-context (-B)", cli.before_context),
+        ("--context (-C)", cli.context),
+    ] {
+        if val > CONTEXT_MAX {
+            eprintln!("xgrep: {name} value {val} out of range (max {CONTEXT_MAX})");
+            return Ok(ExitCode::Fatal);
+        }
     }
 
     let (ctx_before, ctx_after) = match (cli.before_context, cli.after_context, cli.context) {
