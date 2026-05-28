@@ -466,4 +466,55 @@ mod tests {
         });
         assert_eq!(concat, "hello");
     }
+
+    #[test]
+    fn for_each_self_closing_tag_finds_simple_element() {
+        let mut hits: Vec<Vec<u8>> = Vec::new();
+        for_each_self_closing_tag(b"<a x=\"1\"/>", "a", |attrs| {
+            hits.push(attrs.to_vec());
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0], b" x=\"1\"");
+    }
+
+    #[test]
+    fn for_each_self_closing_tag_skips_non_self_closing() {
+        // Plain <a>body</a> must NOT match — that's for_each_tag's job.
+        let mut hits = 0;
+        for_each_self_closing_tag(b"<a>body</a>", "a", |_attrs| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 0, "non-self-closing element must not match");
+    }
+
+    #[test]
+    fn for_each_self_closing_tag_finds_multiple_relationships() {
+        // Realistic xlsx rels file shape.
+        let xml = br#"<Relationships>
+<Relationship Id="rId1" Target="../theme.xml" Type="theme"/>
+<Relationship Id="rId2" Target="../comments1.xml" Type="comments"/>
+</Relationships>"#;
+        let mut targets: Vec<String> = Vec::new();
+        for_each_self_closing_tag(xml, "Relationship", |attrs| {
+            if let Some(t) = attr(attrs, "Target") {
+                targets.push(std::str::from_utf8(t).unwrap().to_string());
+            }
+            ControlFlow::Continue(())
+        });
+        assert_eq!(targets, vec!["../theme.xml".to_string(), "../comments1.xml".to_string()]);
+    }
+
+    #[test]
+    fn for_each_self_closing_tag_break_stops_iteration() {
+        let xml = b"<a/><a/><a/>";
+        let mut count = 0;
+        let broken = for_each_self_closing_tag(xml, "a", |_attrs| {
+            count += 1;
+            if count == 2 { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
+        });
+        assert!(broken);
+        assert_eq!(count, 2);
+    }
 }
