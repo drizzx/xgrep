@@ -20,6 +20,29 @@ use crate::reader::sst::HitSet;
 /// we fall back to "parse if hit_set non-empty".
 pub const THRESHOLD: usize = 100;
 
+/// Constants for the dense-bypass heuristic. When the hit set is "dense
+/// enough" that almost every sheet will reference at least one hit index,
+/// bypass the per-sheet decide() scan entirely — it's pure overhead in the
+/// all-match case. Two independent triggers:
+/// - hit_count > BYPASS_ABS_THRESHOLD: many matches in absolute terms
+/// - hit_count / sst_len > BYPASS_DENSITY_NUMERATOR / BYPASS_DENSITY_DENOMINATOR:
+///   matches are a high fraction of the sst (handles small ssts that aren't
+///   triggered by the absolute threshold)
+pub const BYPASS_ABS_THRESHOLD: usize = 30;
+pub const BYPASS_DENSITY_NUMERATOR: usize = 1;
+pub const BYPASS_DENSITY_DENOMINATOR: usize = 20;
+
+/// Returns true if the (hit_count, sst_len) pair indicates the fast-path
+/// per-sheet scan should be bypassed because nearly every sheet will
+/// match anyway (making the scan wasted work).
+pub fn should_dense_bypass(hit_count: usize, sst_len: usize) -> bool {
+    if sst_len == 0 {
+        return false;
+    }
+    hit_count > BYPASS_ABS_THRESHOLD
+        || hit_count * BYPASS_DENSITY_DENOMINATOR > sst_len * BYPASS_DENSITY_NUMERATOR
+}
+
 /// Build an augmented regex from (user pattern, sst hit_set). Returns None
 /// when the user pattern alone is the right scanner (hit_set empty), or when
 /// augmentation would exceed THRESHOLD and we therefore can't make a
@@ -228,5 +251,44 @@ mod tests {
         assert!(r.is_match("foo<v>"));
         assert!(r.is_match("<v>1</v>"));
         // No infinite-regex weirdness — compile must have succeeded.
+    }
+
+    #[test]
+    fn should_dense_bypass_zero_sst_returns_false() {
+        assert!(!should_dense_bypass(0, 0));
+        assert!(!should_dense_bypass(5, 0)); // shouldn't happen but defensive
+    }
+
+    #[test]
+    fn should_dense_bypass_low_density_below_abs_returns_false() {
+        // sst_heavy_low_hit-like shape but BELOW thresholds:
+        // 10 hits in 50000 sst → density 0.0002, count below 30
+        assert!(!should_dense_bypass(10, 50_000));
+        assert!(!should_dense_bypass(30, 50_000)); // exactly at threshold, NOT strictly above
+    }
+
+    #[test]
+    fn should_dense_bypass_high_abs_count_returns_true() {
+        // sst_heavy_low_hit fixture: 50 hits in 50000 sst → density 0.001
+        // density alone wouldn't trigger (< 5%) but absolute count > 30 does.
+        assert!(should_dense_bypass(50, 50_000));
+        assert!(should_dense_bypass(31, 50_000));
+    }
+
+    #[test]
+    fn should_dense_bypass_high_density_returns_true() {
+        // many_small fixture: ~10 hits in ~60 sst → density ~17%
+        // absolute below 30 but density > 5% triggers.
+        assert!(should_dense_bypass(10, 60));
+        // 6 / 100 = 6% — above density threshold (5%)
+        assert!(should_dense_bypass(6, 100));
+    }
+
+    #[test]
+    fn should_dense_bypass_at_density_boundary() {
+        // 5 / 100 = 5%. Density check uses strict >, so 5% is NOT a bypass.
+        assert!(!should_dense_bypass(5, 100));
+        // 6 / 100 = 6%, IS a bypass.
+        assert!(should_dense_bypass(6, 100));
     }
 }

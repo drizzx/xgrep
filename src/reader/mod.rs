@@ -81,7 +81,15 @@ pub fn read_cells<'a>(
     // When aborted, sst parsing stopped early to cap cost. The hit_set is
     // truncated and unsafe to use for fast-path skip decisions, so we bypass
     // fast-path entirely (augmented = None) and parse all sheets the v0.1 way.
-    let augmented = if want_fast_path && !aborted {
+    //
+    // When the hit set is dense, every sheet almost certainly references at
+    // least one matching index — the per-sheet decide() scan would return
+    // true for every sheet, making it pure overhead. Bypass fast-path in that
+    // case too (see fast_path::should_dense_bypass).
+    let dense_bypass = want_fast_path
+        && !aborted
+        && fast_path::should_dense_bypass(hit_set.count(), hit_set.len());
+    let augmented = if want_fast_path && !aborted && !dense_bypass {
         Some(fast_path::augment(opts.pattern.unwrap(), &hit_set))
     } else {
         None

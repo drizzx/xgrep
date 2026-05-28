@@ -40,6 +40,11 @@ impl HitSet {
     pub fn is_empty(&self) -> bool {
         self.bits.iter().all(|w| *w == 0)
     }
+    /// Returns the total number of sst entries this HitSet was sized for
+    /// (i.e. the sst length at construction time).
+    pub fn len(&self) -> usize {
+        self.len
+    }
     pub fn iter(&self) -> impl Iterator<Item = usize> + '_ {
         (0..self.len).filter(|&i| self.contains(i))
     }
