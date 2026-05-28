@@ -24,9 +24,6 @@ pub fn row_from_a1(cell: &str) -> Option<u32> {
         return None; // no leading letters
     }
     let digits = &cell[split..];
-    if digits.is_empty() {
-        return None;
-    }
     let row: u32 = digits.parse().ok()?;
     if row == 0 {
         return None;
