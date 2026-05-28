@@ -10,6 +10,7 @@ pub mod hidden;
 pub mod oracle;
 pub mod sst;
 pub mod zip_index;
+pub(crate) mod xml_scan;
 
 use std::collections::HashMap;
 use std::path::Path;
