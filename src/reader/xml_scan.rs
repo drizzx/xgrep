@@ -22,11 +22,85 @@ use std::ops::ControlFlow;
 ///   ` `, `\t`, `\n`, `\r`, `>`, `/` so that e.g. `tag="si"` does not collide
 ///   with `<sst>`.
 pub fn for_each_tag(
-    _xml: &[u8],
-    _tag: &str,
-    _visit: impl FnMut(&[u8], &[u8]) -> ControlFlow<()>,
+    xml: &[u8],
+    tag: &str,
+    mut visit: impl FnMut(&[u8], &[u8]) -> ControlFlow<()>,
 ) -> bool {
-    unimplemented!("Task 4")
+    let tag_bytes = tag.as_bytes();
+    let open_close = closing_marker(tag);
+    let mut pos = 0;
+    while pos < xml.len() {
+        // Find the next `<` from `pos`.
+        let lt = match memchr(b'<', &xml[pos..]) {
+            Some(off) => pos + off,
+            None => return false,
+        };
+        // Confirm `<tag` followed by a tag-boundary byte.
+        let after_lt = lt + 1;
+        if after_lt + tag_bytes.len() > xml.len() {
+            return false;
+        }
+        if &xml[after_lt..after_lt + tag_bytes.len()] != tag_bytes {
+            pos = lt + 1;
+            continue;
+        }
+        let boundary_idx = after_lt + tag_bytes.len();
+        let boundary = xml.get(boundary_idx).copied();
+        let is_boundary = matches!(
+            boundary,
+            Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') | Some(b'>') | Some(b'/')
+        );
+        if !is_boundary {
+            pos = lt + 1;
+            continue;
+        }
+        // Find the `>` ending the open tag.
+        let gt_rel = match memchr(b'>', &xml[boundary_idx..]) {
+            Some(off) => off,
+            None => return false,
+        };
+        let gt = boundary_idx + gt_rel;
+        // If the byte before `>` is `/`, it's a self-closing tag — skip (regex
+        // behavior also misses these).
+        if gt > 0 && xml[gt - 1] == b'/' {
+            pos = gt + 1;
+            continue;
+        }
+        let attrs = &xml[boundary_idx..gt];
+        let body_start = gt + 1;
+        // Find the first `</tag>` after body_start.
+        let close = match find_subslice(&xml[body_start..], &open_close) {
+            Some(off) => body_start + off,
+            None => return false,
+        };
+        let body = &xml[body_start..close];
+        match visit(attrs, body) {
+            ControlFlow::Break(()) => return true,
+            ControlFlow::Continue(()) => {}
+        }
+        pos = close + open_close.len();
+    }
+    false
+}
+
+fn closing_marker(tag: &str) -> Vec<u8> {
+    let mut v = Vec::with_capacity(3 + tag.len());
+    v.extend_from_slice(b"</");
+    v.extend_from_slice(tag.as_bytes());
+    v.push(b'>');
+    v
+}
+
+fn memchr(needle: u8, hay: &[u8]) -> Option<usize> {
+    hay.iter().position(|&b| b == needle)
+}
+
+fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || needle.len() > hay.len() {
+        return None;
+    }
+    let last = hay.len() - needle.len();
+    (0..=last).find(|&i| &hay[i..i + needle.len()] == needle)
 }
 
 /// Return the unquoted value of `name="..."` from an attrs slice. Only
@@ -180,5 +254,74 @@ mod tests {
     fn attr_returns_none_on_malformed_attribute() {
         // No closing quote — function should not panic.
         assert_eq!(attr(b"x=\"unterminated", "x"), None);
+    }
+
+    #[test]
+    fn for_each_tag_finds_single_element() {
+        let mut hits: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+        for_each_tag(b"<a>body</a>", "a", |attrs, body| {
+            hits.push((attrs.to_vec(), body.to_vec()));
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, b"");
+        assert_eq!(hits[0].1, b"body");
+    }
+
+    #[test]
+    fn for_each_tag_returns_attrs_slice() {
+        let mut hits: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+        for_each_tag(b"<a x=\"1\" y=\"2\">b</a>", "a", |attrs, body| {
+            hits.push((attrs.to_vec(), body.to_vec()));
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, b" x=\"1\" y=\"2\"");
+        assert_eq!(hits[0].1, b"b");
+    }
+
+    #[test]
+    fn for_each_tag_finds_multiple_elements() {
+        let mut bodies: Vec<Vec<u8>> = Vec::new();
+        for_each_tag(b"<a>1</a><a>2</a><a>3</a>", "a", |_attrs, body| {
+            bodies.push(body.to_vec());
+            ControlFlow::Continue(())
+        });
+        assert_eq!(bodies, vec![b"1".to_vec(), b"2".to_vec(), b"3".to_vec()]);
+    }
+
+    #[test]
+    fn for_each_tag_break_stops_iteration_and_returns_true() {
+        let mut count = 0;
+        let broken = for_each_tag(b"<a>1</a><a>2</a><a>3</a>", "a", |_a, _b| {
+            count += 1;
+            if count == 2 {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert!(broken);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn for_each_tag_continue_throughout_returns_false() {
+        let broken = for_each_tag(b"<a>1</a>", "a", |_a, _b| ControlFlow::Continue(()));
+        assert!(!broken);
+    }
+
+    #[test]
+    fn for_each_tag_handles_nested_elements_with_lazy_close() {
+        // Like the regex `<si\b[^>]*>([\s\S]*?)</si>` — first close wins.
+        let mut hits: Vec<Vec<u8>> = Vec::new();
+        for_each_tag(b"<a><a>inner</a></a>", "a", |_attrs, body| {
+            hits.push(body.to_vec());
+            ControlFlow::Continue(())
+        });
+        // First open at offset 0; first `</a>` is the inner close at offset 11.
+        // So we get one outer match with body "<a>inner".
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0], b"<a>inner");
     }
 }
