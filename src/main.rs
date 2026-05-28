@@ -167,6 +167,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         sheet_filter: sheet_glob.as_ref().map(|g| g.compile_matcher()),
         pattern: None,
         disable_fast_path,
+        encoding: None,
     };
     let threads = if cli.threads == 0 {
         num_cpus().max(1)

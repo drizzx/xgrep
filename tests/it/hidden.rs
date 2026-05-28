@@ -24,6 +24,7 @@ fn hidden_sheet_excluded_when_no_hidden() {
         sheet_filter: None,
         pattern: None,
         disable_fast_path: false,
+        encoding: None,
     };
     let cells = read_cells(&path, &opts).unwrap();
     assert!(!cells.iter().any(|c| c.text == "hidden-sheet-marker"));
@@ -39,6 +40,7 @@ fn hidden_row_and_col_excluded_when_no_hidden() {
         sheet_filter: None,
         pattern: None,
         disable_fast_path: false,
+        encoding: None,
     };
     let cells = read_cells(&path, &opts).unwrap();
     assert!(!cells.iter().any(|c| c.text == "hidden-row-marker"));

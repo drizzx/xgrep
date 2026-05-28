@@ -33,6 +33,10 @@ pub struct ReaderOptions<'a> {
     /// True to bypass all fast-paths and walk the v0.1 path regardless of
     /// `pattern`. Wired to `XGREP_DISABLE_FAST_PATH=1` in main.rs (Task 22).
     pub disable_fast_path: bool,
+    /// Override CSV decoding encoding (e.g. "gbk", "utf-16le"). `None` =
+    /// UTF-8 default with BOM auto-detect. Ignored for xlsx (always UTF-8
+    /// by spec). Validated at CLI parse time via `encoding_rs::Encoding::for_label`.
+    pub encoding: Option<String>,
 }
 
 impl<'a> ReaderOptions<'a> {
@@ -43,6 +47,7 @@ impl<'a> ReaderOptions<'a> {
             sheet_filter: None,
             pattern: None,
             disable_fast_path: false,
+            encoding: None,
         }
     }
 }
