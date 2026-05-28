@@ -71,6 +71,26 @@ pub fn read_cells<'a>(
     path: &Path,
     opts: &ReaderOptions<'a>,
 ) -> Result<Vec<CellRecord>, SearchError> {
+    match path.extension().and_then(|s| s.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("xlsx") || ext.eq_ignore_ascii_case("xlsm") => {
+            read_xlsx_cells(path, opts)
+        }
+        Some(ext) if ext.eq_ignore_ascii_case("csv") || ext.eq_ignore_ascii_case("tsv") => {
+            csv::read_csv_cells(path, opts)
+        }
+        Some(other) => Err(SearchError::Parse(format!(
+            "unsupported file format: .{other}"
+        ))),
+        None => Err(SearchError::Parse(
+            "file has no extension (cannot determine format)".into(),
+        )),
+    }
+}
+
+fn read_xlsx_cells<'a>(
+    path: &Path,
+    opts: &ReaderOptions<'a>,
+) -> Result<Vec<CellRecord>, SearchError> {
     // One ZipIndex per file — used by hidden + comments. Workbook (calamine) is
     // opened separately because calamine needs an owned file handle (it parses
     // the zip itself). This is fine: zip 2's File-based open is fast (no decompression

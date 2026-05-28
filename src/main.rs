@@ -10,7 +10,8 @@ use xgrep::error::ExitCode;
 use xgrep::matcher::{CaseMode, Pattern};
 use xgrep::printer::print_block;
 use xgrep::reader::ReaderOptions;
-use xgrep::walker::walk_xlsx;
+use encoding_rs::Encoding;
+use xgrep::walker::walk_supported;
 use xgrep::worker::run_search;
 use xgrep::MatchEvent;
 
@@ -80,6 +81,13 @@ struct Cli {
     sheet: Option<String>,
     #[arg(long, help = "Always print the layer tag (even [display])")]
     layers: bool,
+
+    #[arg(
+        short = 'E',
+        long = "encoding",
+        help = "Override CSV/TSV decoding (e.g. gbk, utf-16le); ignored for xlsx"
+    )]
+    encoding: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -111,6 +119,15 @@ fn main() -> StdExit {
 }
 
 fn run(cli: Cli) -> anyhow::Result<ExitCode> {
+    if let Some(enc) = cli.encoding.as_deref() {
+        if Encoding::for_label(enc.as_bytes()).is_none() {
+            eprintln!(
+                "xgrep: unknown encoding '{enc}'; see https://encoding.spec.whatwg.org/ for valid labels"
+            );
+            return Ok(ExitCode::Fatal);
+        }
+    }
+
     // Pattern: positional `pattern` + any number of `-e` flags. Combine as alternation.
     let patterns: Vec<String> = cli
         .regexp
@@ -152,7 +169,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     let file_glob = cli.glob.as_deref().map(Glob::new).transpose()?;
     let sheet_glob = cli.sheet.as_deref().map(Glob::new).transpose()?;
 
-    let xlsx_paths = walk_xlsx(&paths_in, file_glob.as_ref())?;
+    let xlsx_paths = walk_supported(&paths_in, file_glob.as_ref())?;
     if xlsx_paths.is_empty() {
         return Ok(ExitCode::NoMatch);
     }
@@ -167,7 +184,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         sheet_filter: sheet_glob.as_ref().map(|g| g.compile_matcher()),
         pattern: None,
         disable_fast_path,
-        encoding: None,
+        encoding: cli.encoding.clone(),
     };
     let threads = if cli.threads == 0 {
         num_cpus().max(1)

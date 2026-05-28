@@ -137,9 +137,10 @@ fn worker_runs_files_in_parallel_and_emits_one_block_per_file() {
 }
 
 #[test]
-fn walker_finds_xlsx_files_recursively_and_skips_others() {
+fn walker_finds_supported_files_recursively_and_skips_others() {
+    use std::ffi::OsStr;
     use std::fs;
-    use xgrep::walker::walk_xlsx;
+    use xgrep::walker::walk_supported;
 
     let dir = TempDir::new().unwrap();
     let sub = dir.path().join("nested");
@@ -147,12 +148,14 @@ fn walker_finds_xlsx_files_recursively_and_skips_others() {
     write_basic_xlsx(dir.path());
     write_basic_xlsx(&sub);
     fs::write(dir.path().join("note.txt"), "ignore me").unwrap();
-    fs::write(dir.path().join("data.csv"), "ignore,me").unwrap();
+    fs::write(dir.path().join("data.csv"), "a,b").unwrap();
 
-    let mut found: Vec<_> = walk_xlsx(&[dir.path().to_path_buf()], None).unwrap();
+    let mut found: Vec<_> = walk_supported(&[dir.path().to_path_buf()], None).unwrap();
     found.sort();
-    assert_eq!(found.len(), 2);
+    // 2 xlsx files + 1 csv file; .txt is excluded
+    assert_eq!(found.len(), 3);
+    let supported_exts: &[&OsStr] = &[OsStr::new("xlsx"), OsStr::new("csv")];
     assert!(found
         .iter()
-        .all(|p| p.extension().map(|e| e == "xlsx").unwrap_or(false)));
+        .all(|p| p.extension().map(|e| supported_exts.contains(&e)).unwrap_or(false)));
 }

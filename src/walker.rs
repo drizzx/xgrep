@@ -1,6 +1,7 @@
 //! Path discovery. Uses `ignore::WalkBuilder` so we get standard `.gitignore`
-//! semantics and high-throughput parallel iteration "for free". xlsx is filtered
-//! by extension; an optional glob narrows further (matched against the full path).
+//! semantics and high-throughput parallel iteration "for free". Supported files
+//! (xlsx, xlsm, csv, tsv) are filtered by extension; an optional glob narrows
+//! further (matched against the full path).
 
 use std::path::PathBuf;
 
@@ -9,7 +10,7 @@ use ignore::WalkBuilder;
 
 use crate::error::SearchError;
 
-pub fn walk_xlsx(roots: &[PathBuf], file_glob: Option<&Glob>) -> Result<Vec<PathBuf>, SearchError> {
+pub fn walk_supported(roots: &[PathBuf], file_glob: Option<&Glob>) -> Result<Vec<PathBuf>, SearchError> {
     if roots.is_empty() {
         return Ok(Vec::new());
     }
@@ -32,7 +33,12 @@ pub fn walk_xlsx(roots: &[PathBuf], file_glob: Option<&Glob>) -> Result<Vec<Path
         let path = entry.into_path();
         if path
             .extension()
-            .map(|e| e.eq_ignore_ascii_case("xlsx") || e.eq_ignore_ascii_case("xlsm"))
+            .map(|e| {
+                e.eq_ignore_ascii_case("xlsx")
+                    || e.eq_ignore_ascii_case("xlsm")
+                    || e.eq_ignore_ascii_case("csv")
+                    || e.eq_ignore_ascii_case("tsv")
+            })
             .unwrap_or(false)
         {
             if let Some(m) = &matcher {
