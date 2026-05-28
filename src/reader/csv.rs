@@ -65,6 +65,10 @@ pub fn read_csv_cells(
 /// 3. `encoding_rs::Encoding::for_label(label)`; unknown label → Parse error.
 /// 4. Decode with malformed-byte replacement (U+FFFD) — same as rg.
 fn decode(bytes: &[u8], override_enc: Option<&str>) -> Result<String, SearchError> {
+    // body_start is the index AFTER any BOM that encoding_rs won't consume itself.
+    // UTF-8: encoding_rs leaves the BOM in the decoded output, so we strip it
+    // manually (skip 3 bytes). UTF-16LE/BE: encoding_rs's decode() detects and
+    // consumes the BOM as part of the encoding stream — leave body_start at 0.
     let (bom_hint, body_start): (Option<&str>, usize) = match bytes {
         [0xEF, 0xBB, 0xBF, ..] => (Some("utf-8"), 3),
         [0xFF, 0xFE, ..] => (Some("utf-16le"), 0),
@@ -177,5 +181,20 @@ mod tests {
         assert_eq!(cells.len(), 2);
         assert_eq!(cells[0].text, "张三");
         assert_eq!(cells[1].text, "李四");
+    }
+
+    #[test]
+    fn crlf_line_endings_yield_same_cells_as_lf() {
+        // Excel-exported CSV on Windows uses CRLF; we must treat it identically
+        // to LF-terminated rows.
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().join("crlf.csv");
+        write(&p, b"a,b\r\nc,d\r\n");
+        let cells = read_csv_cells(&p, &opts()).unwrap();
+        assert_eq!(cells.len(), 4);
+        assert_eq!(cells[0].cell, "A1");
+        assert_eq!(cells[0].text, "a");
+        assert_eq!(cells[3].cell, "B2");
+        assert_eq!(cells[3].text, "d");
     }
 }
