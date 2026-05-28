@@ -113,6 +113,12 @@ fn print_pretty(
                 MatchEvent::Error { message, .. } => {
                     writeln!(out, "  ERROR: {message}")?;
                 }
+                MatchEvent::Context { .. } => {
+                    // TODO(v0.3 Task 7): render "  <sheet_prefix><cell>: <text> [context]"
+                }
+                MatchEvent::Separator => {
+                    // TODO(v0.3 Task 7): render "  --"
+                }
                 _ => {}
             }
         }

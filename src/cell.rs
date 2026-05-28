@@ -12,6 +12,28 @@ pub fn to_a1(row: u32, col: u32) -> String {
     format!("{}{}", col_str, row + 1)
 }
 
+/// Inverse of the row-component of `to_a1`. Extracts the row number from an
+/// A1-style cell address. Returns `None` if the address is malformed:
+/// - empty string
+/// - no leading letters
+/// - no trailing digits
+/// - digit prefix is "0" (row 0 is not a valid A1 row)
+pub fn row_from_a1(cell: &str) -> Option<u32> {
+    let split = cell.find(|c: char| c.is_ascii_digit())?;
+    if split == 0 {
+        return None; // no leading letters
+    }
+    let digits = &cell[split..];
+    if digits.is_empty() {
+        return None;
+    }
+    let row: u32 = digits.parse().ok()?;
+    if row == 0 {
+        return None;
+    }
+    Some(row)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,5 +64,27 @@ mod tests {
     #[test]
     fn a1_large_row() {
         assert_eq!(to_a1(1_048_575, 0), "A1048576");
+    }
+
+    #[test]
+    fn row_from_a1_basic() {
+        assert_eq!(row_from_a1("A1").unwrap(), 1);
+        assert_eq!(row_from_a1("B3").unwrap(), 3);
+        assert_eq!(row_from_a1("Z99").unwrap(), 99);
+    }
+
+    #[test]
+    fn row_from_a1_multi_letter_column() {
+        assert_eq!(row_from_a1("AA1").unwrap(), 1);
+        assert_eq!(row_from_a1("ZZ42").unwrap(), 42);
+        assert_eq!(row_from_a1("AAA1000").unwrap(), 1000);
+    }
+
+    #[test]
+    fn row_from_a1_invalid_returns_none() {
+        assert!(row_from_a1("").is_none());
+        assert!(row_from_a1("A").is_none());          // no digits
+        assert!(row_from_a1("123").is_none());        // no letters
+        assert!(row_from_a1("A0").is_none());         // row 0 not valid
     }
 }

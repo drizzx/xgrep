@@ -12,6 +12,20 @@ pub mod worker;
 use serde::Serialize;
 use std::path::PathBuf;
 
+/// Context-line configuration (rg-aligned). When both `before` and `after`
+/// are 0, `search_file` takes the single-pass code path with zero overhead.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ContextOptions {
+    pub before: u32,
+    pub after: u32,
+}
+
+impl ContextOptions {
+    pub fn is_zero(&self) -> bool {
+        self.before == 0 && self.after == 0
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum MatchEvent {
@@ -28,6 +42,19 @@ pub enum MatchEvent {
         text: String,
         submatches: Vec<Submatch>,
     },
+    /// A non-matching cell surfaced because it falls within the row-context
+    /// window (`-A`/`-B`/`-C`) of an adjacent match. Identical shape to
+    /// `Match` minus the `submatches` field.
+    Context {
+        path: PathBuf,
+        sheet: String,
+        cell: String,
+        layer: String,
+        text: String,
+    },
+    /// Inserted between disjoint context spans within the same file (rg's
+    /// `--` separator). Carries no payload.
+    Separator,
     #[serde(rename = "end")]
     FileEnd {
         path: PathBuf,
