@@ -1,11 +1,13 @@
 //! Shared strings (`xl/sharedStrings.xml`) parse + hit-index set construction.
 //!
-//! ## Why the regex-only parse
+//! ## Parse approach: byte-level xml_scan
 //! sharedStrings is a flat sequence of `<si>...</si>` entries; rich-text entries
 //! contain multiple `<t>` runs which we concatenate. This is the same pattern
-//! used for comments — both are "find all <t>...</t> within each item." We
-//! deliberately do NOT pull in quick-xml etc.: regex is already a runtime dep,
-//! and the sst grammar is tiny enough.
+//! used for comments — both are "find all <t>...</t> within each item." Both
+//! delegate to the byte scanner in `xml_scan`, which handles the tiny xlsx
+//! subgrammar without a regex compile cost (the v0.2.0 implementation used
+//! regex here; v0.2.1 replaced it for the perf win documented in
+//! `docs/superpowers/perf/v0.2-bench-report.md`).
 
 use crate::error::SearchError;
 use crate::matcher::Pattern;
