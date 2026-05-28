@@ -25,3 +25,5 @@ mod perf_oracle;
 mod sst;
 #[path = "it/csv_basic.rs"]
 mod csv_basic;
+#[path = "it/context_lines.rs"]
+mod context_lines;

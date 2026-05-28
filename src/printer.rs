@@ -113,11 +113,23 @@ fn print_pretty(
                 MatchEvent::Error { message, .. } => {
                     writeln!(out, "  ERROR: {message}")?;
                 }
-                MatchEvent::Context { .. } => {
-                    // TODO(v0.3 Task 7): render "  <sheet_prefix><cell>: <text> [context]"
+                MatchEvent::Context { sheet, cell, text, .. } => {
+                    write!(out, "  ")?;
+                    if !sheet.is_empty() {
+                        out.set_color(&sheet_spec)?;
+                        write!(out, "{sheet}")?;
+                        out.reset()?;
+                        write!(out, "!")?;
+                    }
+                    out.set_color(&cell_spec)?;
+                    write!(out, "{cell}")?;
+                    out.reset()?;
+                    out.set_color(&tag_spec)?;
+                    writeln!(out, ": {text} [context]")?;
+                    out.reset()?;
                 }
                 MatchEvent::Separator => {
-                    // TODO(v0.3 Task 7): render "  --"
+                    writeln!(out, "  --")?;
                 }
                 _ => {}
             }
