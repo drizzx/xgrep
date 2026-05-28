@@ -9,7 +9,6 @@
 
 use crate::error::SearchError;
 use crate::matcher::Pattern;
-use crate::reader::comments::xml_unescape;
 use crate::reader::zip_index::ZipIndex;
 
 #[derive(Debug, Default)]
@@ -119,31 +118,32 @@ fn parse_xml_with_early_abort(
     pattern: Option<&Pattern>,
     abort_threshold: usize,
 ) -> (Vec<String>, HitSet, bool) {
-    let re_si = regex::Regex::new(r#"<si\b[^>]*>([\s\S]*?)</si>"#).unwrap();
-    let re_t = regex::Regex::new(r#"<t[^>]*>([\s\S]*?)</t>"#).unwrap();
+    use std::ops::ControlFlow;
     let mut sst = Vec::new();
     let mut hit_indices: Vec<usize> = Vec::new();
-    let mut aborted = false;
-    for cap in re_si.captures_iter(xml) {
-        let idx = sst.len();
-        let body = &cap[1];
-        let s: String = re_t
-            .captures_iter(body)
-            .map(|c| xml_unescape(&c[1]))
-            .collect::<Vec<_>>()
-            .join("");
-        if let Some(p) = pattern {
-            if p.is_match(&s) {
-                hit_indices.push(idx);
-                if hit_indices.len() > abort_threshold {
-                    aborted = true;
-                    sst.push(s);
-                    break;
+    let aborted = crate::reader::xml_scan::for_each_tag(
+        xml.as_bytes(),
+        "si",
+        |_attrs, body| {
+            let idx = sst.len();
+            let mut text = String::new();
+            crate::reader::xml_scan::for_each_tag(body, "t", |_t_attrs, t_body| {
+                text.push_str(&crate::reader::xml_scan::xml_unescape(t_body));
+                ControlFlow::Continue(())
+            });
+            if let Some(p) = pattern {
+                if p.is_match(&text) {
+                    hit_indices.push(idx);
+                    if hit_indices.len() > abort_threshold {
+                        sst.push(text);
+                        return ControlFlow::Break(());
+                    }
                 }
             }
-        }
-        sst.push(s);
-    }
+            sst.push(text);
+            ControlFlow::Continue(())
+        },
+    );
     let mut hs = HitSet::new(sst.len());
     for &i in &hit_indices {
         hs.insert(i);
