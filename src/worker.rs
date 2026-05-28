@@ -9,7 +9,7 @@ use rayon::ThreadPoolBuilder;
 
 use crate::matcher::Pattern;
 use crate::reader::ReaderOptions;
-use crate::{search_file, FileBlock};
+use crate::{search_file, ContextOptions, FileBlock};
 
 pub fn run_search(
     paths: Vec<PathBuf>,
@@ -17,6 +17,7 @@ pub fn run_search(
     reader_opts: &ReaderOptions<'_>,
     invert: bool,
     threads: usize,
+    ctx: ContextOptions,
 ) -> Vec<FileBlock> {
     let pool = ThreadPoolBuilder::new()
         .num_threads(threads.max(1))
@@ -25,7 +26,7 @@ pub fn run_search(
     pool.install(|| {
         paths
             .into_par_iter()
-            .map(|p| search_file(&p, pattern, reader_opts, invert))
+            .map(|p| search_file(&p, pattern, reader_opts, invert, ctx))
             .collect()
     })
 }

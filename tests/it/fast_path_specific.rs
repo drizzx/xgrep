@@ -16,7 +16,7 @@ fn matches(path: &std::path::Path, pat: &str, disable_fp: bool) -> Vec<String> {
         disable_fast_path: disable_fp,
         ..ReaderOptions::default()
     };
-    let block = search_file(path, &pattern, &opts, false);
+    let block = search_file(path, &pattern, &opts, false, xgrep::ContextOptions::default());
     let mut out: Vec<_> = block
         .events
         .into_iter()

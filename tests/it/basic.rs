@@ -66,7 +66,7 @@ fn search_file_emits_file_block_with_matches() {
         disable_fast_path: false,
         encoding: None,
     };
-    let block: FileBlock = search_file(&path, &pat, &opts, false);
+    let block: FileBlock = search_file(&path, &pat, &opts, false, xgrep::ContextOptions::default());
 
     let matches: Vec<_> = block
         .events
@@ -121,7 +121,7 @@ fn worker_runs_files_in_parallel_and_emits_one_block_per_file() {
         disable_fast_path: false,
         encoding: None,
     };
-    let blocks = run_search(paths.clone(), &pat, &opts, false, 4);
+    let blocks = run_search(paths.clone(), &pat, &opts, false, 4, xgrep::ContextOptions::default());
 
     assert_eq!(blocks.len(), paths.len());
     for b in &blocks {

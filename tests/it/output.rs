@@ -11,7 +11,7 @@ fn search_basic(pattern: &str) -> FileBlock {
     let dir = TempDir::new().unwrap();
     let path = write_basic_xlsx(dir.path());
     let pat = Pattern::compile(pattern, CaseMode::Smart, false, false).unwrap();
-    search_file(&path, &pat, &ReaderOptions::default(), false)
+    search_file(&path, &pat, &ReaderOptions::default(), false, xgrep::ContextOptions::default())
 }
 
 #[test]

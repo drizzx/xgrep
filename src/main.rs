@@ -13,7 +13,7 @@ use xgrep::printer::print_block;
 use xgrep::reader::ReaderOptions;
 use xgrep::walker::walk_supported;
 use xgrep::worker::run_search;
-use xgrep::MatchEvent;
+use xgrep::{ContextOptions, MatchEvent};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -88,6 +88,30 @@ struct Cli {
         help = "Override CSV/TSV decoding (e.g. gbk, utf-16le); ignored for xlsx"
     )]
     encoding: Option<String>,
+
+    #[arg(
+        short = 'A',
+        long = "after-context",
+        default_value_t = 0,
+        help = "Show NUM rows after each match (xlsx: same sheet; CSV: same file)"
+    )]
+    after_context: u32,
+
+    #[arg(
+        short = 'B',
+        long = "before-context",
+        default_value_t = 0,
+        help = "Show NUM rows before each match"
+    )]
+    before_context: u32,
+
+    #[arg(
+        short = 'C',
+        long = "context",
+        default_value_t = 0,
+        help = "Shorthand for -A NUM -B NUM"
+    )]
+    context: u32,
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -127,6 +151,24 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             return Ok(ExitCode::Fatal);
         }
     }
+
+    const CONTEXT_MAX: u32 = 10_000;
+    if cli.after_context > CONTEXT_MAX
+        || cli.before_context > CONTEXT_MAX
+        || cli.context > CONTEXT_MAX
+    {
+        eprintln!("xgrep: context value out of range (max {CONTEXT_MAX})");
+        return Ok(ExitCode::Fatal);
+    }
+
+    let (ctx_before, ctx_after) = match (cli.before_context, cli.after_context, cli.context) {
+        (b, a, _) if b > 0 || a > 0 => (b, a),
+        (_, _, c) => (c, c),
+    };
+    let ctx = ContextOptions {
+        before: ctx_before,
+        after: ctx_after,
+    };
 
     // Pattern: positional `pattern` + any number of `-e` flags. Combine as alternation.
     let patterns: Vec<String> = cli
@@ -197,6 +239,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         &reader_opts,
         cli.invert_match,
         threads,
+        ctx,
     );
 
     let output = if cli.json {

@@ -243,7 +243,7 @@ fn cmd_measure_memory(args: Vec<String>) -> Result<()> {
     };
     let mut total_matches = 0u64;
     for p in &paths {
-        let block = xgrep::search_file(p, &pattern, &reader_opts, false);
+        let block = xgrep::search_file(p, &pattern, &reader_opts, false, xgrep::ContextOptions::default());
         for ev in &block.events {
             if matches!(ev, xgrep::MatchEvent::Match { .. }) {
                 total_matches += 1;

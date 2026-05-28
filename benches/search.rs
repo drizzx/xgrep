@@ -42,7 +42,7 @@ fn require_dir(name: &str) -> Vec<PathBuf> {
 }
 
 fn search_one(path: &Path, pat: &Pattern, opts: &ReaderOptions) -> u64 {
-    let block = xgrep::search_file(path, pat, opts, false);
+    let block = xgrep::search_file(path, pat, opts, false, xgrep::ContextOptions::default());
     block
         .events
         .iter()

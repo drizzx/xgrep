@@ -18,7 +18,7 @@ fn write(path: &Path, bytes: &[u8]) {
 
 fn match_texts(path: &Path, pat: &str) -> Vec<String> {
     let pattern = Pattern::compile(pat, CaseMode::Sensitive, false, false).unwrap();
-    let block = search_file(path, &pattern, &ReaderOptions::default(), false);
+    let block = search_file(path, &pattern, &ReaderOptions::default(), false, xgrep::ContextOptions::default());
     block
         .events
         .into_iter()
@@ -82,7 +82,7 @@ fn csv_e_gbk_round_trip() {
         encoding: Some("gbk".to_string()),
         ..ReaderOptions::default()
     };
-    let block = search_file(&p, &pattern, &opts, false);
+    let block = search_file(&p, &pattern, &opts, false, xgrep::ContextOptions::default());
     let hits: Vec<_> = block
         .events
         .into_iter()
