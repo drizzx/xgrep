@@ -23,3 +23,5 @@ mod output;
 mod perf_oracle;
 #[path = "it/sst.rs"]
 mod sst;
+#[path = "it/csv_basic.rs"]
+mod csv_basic;

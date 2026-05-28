@@ -4,6 +4,16 @@
 
 use std::io::{self, Write};
 
+/// Render the `Sheet!` prefix only when the sheet name is non-empty (CSV
+/// files have no sheet concept; sheet="" suppresses the prefix entirely).
+fn sheet_prefix(sheet: &str) -> String {
+    if sheet.is_empty() {
+        String::new()
+    } else {
+        format!("{}!", sheet)
+    }
+}
+
 use crate::config::{ColorChoice, OutputMode};
 use crate::{FileBlock, MatchEvent};
 
@@ -74,11 +84,15 @@ fn print_pretty(
                     ..
                 } => {
                     let offset = submatches.first().map(|s| s.start + 1).unwrap_or(1);
+                    // sheet_prefix returns "" for CSV (sheet="") so the "!" is suppressed.
+                    let prefix = sheet_prefix(sheet);
                     write!(out, "  ")?;
-                    out.set_color(&sheet_spec)?;
-                    write!(out, "{sheet}")?;
-                    out.reset()?;
-                    write!(out, "!")?;
+                    if !prefix.is_empty() {
+                        out.set_color(&sheet_spec)?;
+                        write!(out, "{sheet}")?;
+                        out.reset()?;
+                        write!(out, "!")?;
+                    }
                     out.set_color(&cell_spec)?;
                     write!(out, "{cell}")?;
                     out.reset()?;
