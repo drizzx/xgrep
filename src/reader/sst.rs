@@ -87,6 +87,74 @@ pub fn build_hit_set(sst: &[String], pattern: Option<&Pattern>) -> HitSet {
     hs
 }
 
+/// Streaming variant of `parse` + `build_hit_set` with early abort.
+///
+/// Scans `xl/sharedStrings.xml` one `<si>` entry at a time. For each entry,
+/// applies `pattern` and accumulates hit indices. As soon as the hit count
+/// exceeds `abort_threshold`, parsing stops and returns `aborted = true`.
+///
+/// When aborted, the returned `sst` is partial (only the entries seen so far)
+/// and `hit_set` may not include all matching indices. Callers MUST bypass
+/// fast-path entirely when aborted is true — using the truncated `hit_set`
+/// in `fast_path::augment` would produce a regex that misses references to
+/// unscanned sst entries, leading to silent wrong-result bugs.
+///
+/// Motivation: `parse` always scans the full sst, paying O(sst_size) regex
+/// cost. For workbooks with very large sst pools (>50k entries) AND patterns
+/// that match many entries, this cost is pure waste because the fast-path
+/// can't skip any sheets anyway (TooManyHits branch). Early abort caps the
+/// cost at O(abort_threshold) for the wasted-effort case.
+pub fn parse_with_early_abort(
+    index: &mut ZipIndex,
+    pattern: Option<&Pattern>,
+    abort_threshold: usize,
+) -> Result<(Vec<String>, HitSet, bool), SearchError> {
+    let Some(xml) = index.read_to_string("xl/sharedStrings.xml")? else {
+        return Ok((Vec::new(), HitSet::new(0), false));
+    };
+    Ok(parse_xml_with_early_abort(&xml, pattern, abort_threshold))
+}
+
+/// Pure helper exposed for unit testing: takes the raw xml string and runs
+/// the streaming parse + early-abort logic. `parse_with_early_abort` is just
+/// `read_to_string` + this.
+fn parse_xml_with_early_abort(
+    xml: &str,
+    pattern: Option<&Pattern>,
+    abort_threshold: usize,
+) -> (Vec<String>, HitSet, bool) {
+    let re_si = regex::Regex::new(r#"<si\b[^>]*>([\s\S]*?)</si>"#).unwrap();
+    let re_t = regex::Regex::new(r#"<t[^>]*>([\s\S]*?)</t>"#).unwrap();
+    let mut sst = Vec::new();
+    let mut hit_indices: Vec<usize> = Vec::new();
+    let mut aborted = false;
+    for cap in re_si.captures_iter(xml) {
+        let idx = sst.len();
+        let body = &cap[1];
+        let s: String = re_t
+            .captures_iter(body)
+            .map(|c| xml_unescape(&c[1]))
+            .collect::<Vec<_>>()
+            .join("");
+        if let Some(p) = pattern {
+            if p.is_match(&s) {
+                hit_indices.push(idx);
+                if hit_indices.len() > abort_threshold {
+                    aborted = true;
+                    sst.push(s);
+                    break;
+                }
+            }
+        }
+        sst.push(s);
+    }
+    let mut hs = HitSet::new(sst.len());
+    for &i in &hit_indices {
+        hs.insert(i);
+    }
+    (sst, hs, aborted)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +209,59 @@ mod tests {
     fn build_hit_set_empty_when_no_matches() {
         let sst = vec!["alpha".into(), "beta".into()];
         let hs = build_hit_set(&sst, Some(&p("zeta")));
+        assert!(hs.is_empty());
+    }
+
+    #[test]
+    fn parse_xml_with_early_abort_no_abort_below_threshold() {
+        // 5 matches, threshold 10 -> no abort, full sst returned
+        let mut xml = String::from("<sst>");
+        for i in 0..5 {
+            xml.push_str(&format!("<si><t>hit-{i}</t></si>"));
+        }
+        for i in 0..5 {
+            xml.push_str(&format!("<si><t>miss-{i}</t></si>"));
+        }
+        xml.push_str("</sst>");
+        let (sst, hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
+        assert!(!aborted);
+        assert_eq!(sst.len(), 10);
+        assert_eq!(hs.count(), 5);
+    }
+
+    #[test]
+    fn parse_xml_with_early_abort_aborts_at_threshold() {
+        // 50 matches, threshold 10 -> aborts after 11 hits (10+1), sst is partial
+        let mut xml = String::from("<sst>");
+        for i in 0..50 {
+            xml.push_str(&format!("<si><t>hit-{i}</t></si>"));
+        }
+        xml.push_str("</sst>");
+        let (sst, _hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
+        assert!(aborted);
+        // We stopped after seeing 11 matches; sst contains those 11 entries.
+        assert!(sst.len() <= 12, "sst should be partial, got len {}", sst.len());
+    }
+
+    #[test]
+    fn parse_xml_with_early_abort_no_pattern_never_aborts() {
+        // pattern = None means no matches counted, threshold doesn't matter
+        let mut xml = String::from("<sst>");
+        for i in 0..100 {
+            xml.push_str(&format!("<si><t>x-{i}</t></si>"));
+        }
+        xml.push_str("</sst>");
+        let (sst, hs, aborted) = parse_xml_with_early_abort(&xml, None, 1);
+        assert!(!aborted);
+        assert_eq!(sst.len(), 100);
+        assert!(hs.is_empty());
+    }
+
+    #[test]
+    fn parse_xml_with_early_abort_empty_xml_returns_empty() {
+        let (sst, hs, aborted) = parse_xml_with_early_abort("", Some(&p("foo")), 10);
+        assert!(!aborted);
+        assert_eq!(sst.len(), 0);
         assert!(hs.is_empty());
     }
 }

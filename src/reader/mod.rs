@@ -72,13 +72,15 @@ pub fn read_cells<'a>(
     let mut zip_index = ZipIndex::open(path)?;
 
     let want_fast_path = !opts.disable_fast_path && opts.pattern.is_some();
-    let sst = if want_fast_path {
-        sst::parse(&mut zip_index)?
+    let (_sst, hit_set, aborted) = if want_fast_path {
+        sst::parse_with_early_abort(&mut zip_index, opts.pattern, fast_path::THRESHOLD)?
     } else {
-        Vec::new()
+        (Vec::new(), sst::HitSet::new(0), false)
     };
-    let hit_set = sst::build_hit_set(&sst, opts.pattern);
-    let augmented = if want_fast_path {
+    // When aborted, sst parsing stopped early to cap cost. The hit_set is
+    // truncated and unsafe to use for fast-path skip decisions, so we bypass
+    // fast-path entirely (augmented = None) and parse all sheets the v0.1 way.
+    let augmented = if want_fast_path && !aborted {
         Some(fast_path::augment(opts.pattern.unwrap(), &hit_set))
     } else {
         None
