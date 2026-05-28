@@ -324,4 +324,86 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0], b"<a>inner");
     }
+
+    #[test]
+    fn for_each_tag_does_not_collide_with_prefix_match() {
+        // `<sst>` must NOT match `tag="s"`. Tag must be followed by a boundary.
+        let mut hits = 0;
+        for_each_tag(b"<sst><s>1</s></sst>", "s", |_a, _b| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 1, "must match <s> exactly, not <sst>");
+    }
+
+    #[test]
+    fn for_each_tag_empty_input_yields_nothing() {
+        let mut hits = 0;
+        for_each_tag(b"", "a", |_a, _b| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 0);
+    }
+
+    #[test]
+    fn for_each_tag_missing_close_yields_nothing_no_panic() {
+        let mut hits = 0;
+        for_each_tag(b"<a>body never closed", "a", |_a, _b| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 0);
+    }
+
+    #[test]
+    fn for_each_tag_skips_self_closing_form() {
+        // Like the regex, self-closing <a/> is not matched.
+        let mut hits = 0;
+        for_each_tag(b"<a/><a>body</a>", "a", |_a, _b| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 1, "only the non-self-closing element counts");
+    }
+
+    #[test]
+    fn for_each_tag_handles_empty_body() {
+        let mut bodies: Vec<Vec<u8>> = Vec::new();
+        for_each_tag(b"<a></a>", "a", |_a, body| {
+            bodies.push(body.to_vec());
+            ControlFlow::Continue(())
+        });
+        assert_eq!(bodies, vec![b"".to_vec()]);
+    }
+
+    #[test]
+    fn for_each_tag_recursion_finds_t_inside_si() {
+        // Real sst pattern: <si><r><t>hello</t></r></si>
+        let xml = b"<si><r><t>hello</t></r></si>";
+        let mut t_bodies: Vec<Vec<u8>> = Vec::new();
+        for_each_tag(xml, "si", |_si_attrs, si_body| {
+            for_each_tag(si_body, "t", |_t_attrs, t_body| {
+                t_bodies.push(t_body.to_vec());
+                ControlFlow::Continue(())
+            });
+            ControlFlow::Continue(())
+        });
+        assert_eq!(t_bodies, vec![b"hello".to_vec()]);
+    }
+
+    #[test]
+    fn for_each_tag_rich_text_concatenates_multiple_t_per_si() {
+        // <si><r><t>hel</t></r><r><t>lo</t></r></si>
+        let xml = b"<si><r><t>hel</t></r><r><t>lo</t></r></si>";
+        let mut concat = String::new();
+        for_each_tag(xml, "si", |_a, body| {
+            for_each_tag(body, "t", |_a2, t_body| {
+                concat.push_str(std::str::from_utf8(t_body).unwrap());
+                ControlFlow::Continue(())
+            });
+            ControlFlow::Continue(())
+        });
+        assert_eq!(concat, "hello");
+    }
 }
