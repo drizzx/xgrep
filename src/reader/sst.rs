@@ -259,8 +259,8 @@ mod tests {
         xml.push_str("</sst>");
         let (sst_size, _hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
         assert!(aborted);
-        // We stopped after seeing 11 matches; sst contains those 11 entries.
-        assert!(sst_size <= 12, "sst should be partial, got len {}", sst_size);
+        // We stopped after seeing 11 matches; sst_size reflects those entries.
+        assert!(sst_size <= 12, "sst_size should be partial, got {}", sst_size);
     }
 
     #[test]
