@@ -517,4 +517,36 @@ mod tests {
         assert!(broken);
         assert_eq!(count, 2);
     }
+
+    #[test]
+    fn for_each_self_closing_tag_empty_input_yields_nothing() {
+        let mut hits = 0;
+        for_each_self_closing_tag(b"", "a", |_attrs| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 0);
+    }
+
+    #[test]
+    fn for_each_self_closing_tag_missing_gt_yields_nothing_no_panic() {
+        // Unterminated open tag — must not panic.
+        let mut hits = 0;
+        for_each_self_closing_tag(b"<a x=\"unterm", "a", |_attrs| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 0);
+    }
+
+    #[test]
+    fn for_each_self_closing_tag_does_not_collide_with_prefix_match() {
+        // `<ab/>` must NOT match tag="a". Same boundary rule as for_each_tag.
+        let mut hits = 0;
+        for_each_self_closing_tag(b"<ab/><a/>", "a", |_attrs| {
+            hits += 1;
+            ControlFlow::Continue(())
+        });
+        assert_eq!(hits, 1, "must match <a/> exactly, not <ab/>");
+    }
 }

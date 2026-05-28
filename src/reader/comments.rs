@@ -1,7 +1,7 @@
 //! Cell comments — parses `xl/comments*.xml` entries via the shared byte
 //! scanner in `xml_scan`. Format is stable across calamine versions; we
-//! parse it ourselves to stay pinned to a small public surface (zip + regex
-//! for pattern matching only).
+//! parse it ourselves to stay pinned to a small public surface (zip +
+//! the in-crate `xml_scan` byte scanner).
 
 use std::ops::ControlFlow;
 
