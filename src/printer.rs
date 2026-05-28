@@ -124,9 +124,11 @@ fn print_pretty(
                     out.set_color(&cell_spec)?;
                     write!(out, "{cell}")?;
                     out.reset()?;
+                    write!(out, ": {text} ")?;
                     out.set_color(&tag_spec)?;
-                    writeln!(out, ": {text} [context]")?;
+                    write!(out, "[context]")?;
                     out.reset()?;
+                    writeln!(out)?;
                 }
                 MatchEvent::Separator => {
                     writeln!(out, "  --")?;
