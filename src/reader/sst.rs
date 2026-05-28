@@ -52,24 +52,20 @@ impl HitSet {
 /// Parse `xl/sharedStrings.xml` into a Vec<String>. Index order matches the
 /// sst's <si> order, which is what xlsx `<v>idx</v>` references use.
 pub fn parse(index: &mut ZipIndex) -> Result<Vec<String>, SearchError> {
+    use std::ops::ControlFlow;
     let Some(xml) = index.read_to_string("xl/sharedStrings.xml")? else {
         return Ok(Vec::new());
     };
-    // Each <si> is one sst entry; entries may contain multiple <t> children
-    // (rich text). Capture each <si>...</si>, then concatenate its <t>...</t>
-    // children with xml-unescape applied to each text node.
-    let re_si = regex::Regex::new(r#"<si\b[^>]*>([\s\S]*?)</si>"#).unwrap();
-    let re_t = regex::Regex::new(r#"<t[^>]*>([\s\S]*?)</t>"#).unwrap();
     let mut out = Vec::new();
-    for cap in re_si.captures_iter(&xml) {
-        let body = &cap[1];
-        let s: String = re_t
-            .captures_iter(body)
-            .map(|c| xml_unescape(&c[1]))
-            .collect::<Vec<_>>()
-            .join("");
-        out.push(s);
-    }
+    crate::reader::xml_scan::for_each_tag(xml.as_bytes(), "si", |_attrs, body| {
+        let mut text = String::new();
+        crate::reader::xml_scan::for_each_tag(body, "t", |_t_attrs, t_body| {
+            text.push_str(&crate::reader::xml_scan::xml_unescape(t_body));
+            ControlFlow::Continue(())
+        });
+        out.push(text);
+        ControlFlow::Continue(())
+    });
     Ok(out)
 }
 
