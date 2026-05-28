@@ -95,8 +95,9 @@ pub fn build_hit_set(sst: &[String], pattern: Option<&Pattern>) -> HitSet {
 /// applies `pattern` and accumulates hit indices. As soon as the hit count
 /// exceeds `abort_threshold`, parsing stops and returns `aborted = true`.
 ///
-/// When aborted, the returned `sst` is partial (only the entries seen so far)
-/// and `hit_set` may not include all matching indices. Callers MUST bypass
+/// When aborted, the returned `sst_size` reflects only the entries scanned
+/// before the threshold trip, and `hit_set` may not include all matching
+/// indices. Callers MUST bypass
 /// fast-path entirely when aborted is true — using the truncated `hit_set`
 /// in `fast_path::augment` would produce a regex that misses references to
 /// unscanned sst entries, leading to silent wrong-result bugs.
@@ -110,9 +111,9 @@ pub fn parse_with_early_abort(
     index: &mut ZipIndex,
     pattern: Option<&Pattern>,
     abort_threshold: usize,
-) -> Result<(Vec<String>, HitSet, bool), SearchError> {
+) -> Result<(usize, HitSet, bool), SearchError> {
     let Some(xml) = index.read_to_string("xl/sharedStrings.xml")? else {
-        return Ok((Vec::new(), HitSet::new(0), false));
+        return Ok((0, HitSet::new(0), false));
     };
     Ok(parse_xml_with_early_abort(&xml, pattern, abort_threshold))
 }
@@ -124,38 +125,54 @@ fn parse_xml_with_early_abort(
     xml: &str,
     pattern: Option<&Pattern>,
     abort_threshold: usize,
-) -> (Vec<String>, HitSet, bool) {
+) -> (usize, HitSet, bool) {
     use std::ops::ControlFlow;
-    let mut sst = Vec::new();
+    let mut sst_size: usize = 0;
     let mut hit_indices: Vec<usize> = Vec::new();
+    let mut text_buf = String::new();
+
     let aborted = crate::reader::xml_scan::for_each_tag(
         xml.as_bytes(),
         "si",
         |_attrs, body| {
-            let idx = sst.len();
-            let mut text = String::new();
+            let idx = sst_size;
+            sst_size += 1;
+            text_buf.clear();
             crate::reader::xml_scan::for_each_tag(body, "t", |_t_attrs, t_body| {
-                text.push_str(&crate::reader::xml_scan::xml_unescape(t_body));
+                append_t_body(&mut text_buf, t_body);
                 ControlFlow::Continue(())
             });
             if let Some(p) = pattern {
-                if p.is_match(&text) {
+                if p.is_match(&text_buf) {
                     hit_indices.push(idx);
                     if hit_indices.len() > abort_threshold {
-                        sst.push(text);
                         return ControlFlow::Break(());
                     }
                 }
             }
-            sst.push(text);
             ControlFlow::Continue(())
         },
     );
-    let mut hs = HitSet::new(sst.len());
+
+    let mut hs = HitSet::new(sst_size);
     for &i in &hit_indices {
         hs.insert(i);
     }
-    (sst, hs, aborted)
+    (sst_size, hs, aborted)
+}
+
+/// Append a `<t>` element body to the output string. Fast path: if the body
+/// contains no `&`, push it directly as UTF-8 (zero allocation). Slow path:
+/// route through `xml_scan::xml_unescape` which handles the 5 standard
+/// entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`).
+fn append_t_body(out: &mut String, t_body: &[u8]) {
+    if !t_body.contains(&b'&') {
+        if let Ok(s) = std::str::from_utf8(t_body) {
+            out.push_str(s);
+            return;
+        }
+    }
+    out.push_str(&crate::reader::xml_scan::xml_unescape(t_body));
 }
 
 #[cfg(test)]
@@ -226,9 +243,9 @@ mod tests {
             xml.push_str(&format!("<si><t>miss-{i}</t></si>"));
         }
         xml.push_str("</sst>");
-        let (sst, hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
+        let (sst_size, hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
         assert!(!aborted);
-        assert_eq!(sst.len(), 10);
+        assert_eq!(sst_size, 10);
         assert_eq!(hs.count(), 5);
     }
 
@@ -240,10 +257,10 @@ mod tests {
             xml.push_str(&format!("<si><t>hit-{i}</t></si>"));
         }
         xml.push_str("</sst>");
-        let (sst, _hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
+        let (sst_size, _hs, aborted) = parse_xml_with_early_abort(&xml, Some(&p("hit")), 10);
         assert!(aborted);
         // We stopped after seeing 11 matches; sst contains those 11 entries.
-        assert!(sst.len() <= 12, "sst should be partial, got len {}", sst.len());
+        assert!(sst_size <= 12, "sst should be partial, got len {}", sst_size);
     }
 
     #[test]
@@ -254,17 +271,48 @@ mod tests {
             xml.push_str(&format!("<si><t>x-{i}</t></si>"));
         }
         xml.push_str("</sst>");
-        let (sst, hs, aborted) = parse_xml_with_early_abort(&xml, None, 1);
+        let (sst_size, hs, aborted) = parse_xml_with_early_abort(&xml, None, 1);
         assert!(!aborted);
-        assert_eq!(sst.len(), 100);
+        assert_eq!(sst_size, 100);
         assert!(hs.is_empty());
     }
 
     #[test]
     fn parse_xml_with_early_abort_empty_xml_returns_empty() {
-        let (sst, hs, aborted) = parse_xml_with_early_abort("", Some(&p("foo")), 10);
+        let (sst_size, hs, aborted) = parse_xml_with_early_abort("", Some(&p("foo")), 10);
         assert!(!aborted);
-        assert_eq!(sst.len(), 0);
+        assert_eq!(sst_size, 0);
         assert!(hs.is_empty());
+    }
+
+    #[test]
+    fn parse_xml_with_early_abort_reuses_text_buf_no_stale_content() {
+        // Run sequence: long string, then short string, then long again.
+        // If text_buf weren't .clear()-ed between entries, "stale" content
+        // from the previous entry would leak into the current entry's match.
+        let xml = "<sst>\
+            <si><t>verylongstringthatwillstayinbuffer</t></si>\
+            <si><t>x</t></si>\
+            <si><t>verylongstringthatwillstayinbuffer</t></si>\
+        </sst>";
+        // Pattern matches "x" — should hit exactly entry 1 (idx 1), not 0 or 2.
+        let pat = p("^x$");
+        let (sst_size, hs, _aborted) = parse_xml_with_early_abort(xml, Some(&pat), 10);
+        assert_eq!(sst_size, 3);
+        // Only index 1 (the "x" entry) should hit.
+        let hit_indices: Vec<usize> = hs.iter().collect();
+        assert_eq!(hit_indices, vec![1]);
+    }
+
+    #[test]
+    fn parse_xml_with_early_abort_handles_xml_entities() {
+        // <t> bodies containing entities — exercises the slow path of
+        // append_t_body (the path that calls xml_unescape).
+        let xml = "<sst><si><t>a&amp;b</t></si><si><t>plain</t></si></sst>";
+        let pat = p("a&b");  // should match after unescape
+        let (sst_size, hs, _aborted) = parse_xml_with_early_abort(xml, Some(&pat), 10);
+        assert_eq!(sst_size, 2);
+        let hit_indices: Vec<usize> = hs.iter().collect();
+        assert_eq!(hit_indices, vec![0]);
     }
 }

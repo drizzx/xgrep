@@ -73,10 +73,10 @@ pub fn read_cells<'a>(
     let mut zip_index = ZipIndex::open(path)?;
 
     let want_fast_path = !opts.disable_fast_path && opts.pattern.is_some();
-    let (_sst, hit_set, aborted) = if want_fast_path {
+    let (_sst_size, hit_set, aborted) = if want_fast_path {
         sst::parse_with_early_abort(&mut zip_index, opts.pattern, fast_path::THRESHOLD)?
     } else {
-        (Vec::new(), sst::HitSet::new(0), false)
+        (0usize, sst::HitSet::new(0), false)
     };
     // When aborted, sst parsing stopped early to cap cost. The hit_set is
     // truncated and unsafe to use for fast-path skip decisions, so we bypass
