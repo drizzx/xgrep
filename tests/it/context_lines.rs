@@ -218,6 +218,51 @@ fn cli_a_overlimit_exits_2() {
     assert_eq!(out.status.code(), Some(2));
 }
 
+/// `-C` combined with `-A`/`-B` should take the `max()` per side (rg-aligned),
+/// not be silently dropped when either of A/B is non-zero.
+#[test]
+fn cli_c_combined_with_a_takes_max() {
+    let dir = TempDir::new().unwrap();
+    let p = dir.path().join("ctxmax.csv");
+    // 30 rows; match on row 11 ("TARGET"). Everything else is "rowN".
+    let mut data = String::new();
+    for i in 1..=30 {
+        if i == 11 {
+            data.push_str("TARGET\n");
+        } else {
+            data.push_str(&format!("row{i}\n"));
+        }
+    }
+    write_bytes(&p, data.as_bytes());
+
+    // Case 1: -C 5 -A 10 → after = max(10, 5) = 10
+    let out = Command::new(xgrep_bin())
+        .args(["TARGET", "-C", "5", "-A", "10", "--json", p.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(out.status.success() || out.status.code() == Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let context_count = stdout.matches(r#""type":"context""#).count();
+    // Expected: 5 before (rows 6..=10) + 10 after (rows 12..=21) = 15
+    assert_eq!(
+        context_count, 15,
+        "-C 5 -A 10 should yield 5 before + 10 after = 15 context events; got {context_count}.\nstdout:\n{stdout}"
+    );
+
+    // Case 2: -C 10 -A 3 → after = max(3, 10) = 10
+    let out = Command::new(xgrep_bin())
+        .args(["TARGET", "-C", "10", "-A", "3", "--json", p.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let context_count = stdout.matches(r#""type":"context""#).count();
+    // Expected: 10 before (rows 1..=10) + 10 after (rows 12..=21) = 20
+    assert_eq!(
+        context_count, 20,
+        "-C 10 -A 3 should yield 10 before + 10 after = 20 context events; got {context_count}.\nstdout:\n{stdout}"
+    );
+}
+
 #[test]
 fn cli_a_within_limit_runs() {
     let dir = TempDir::new().unwrap();

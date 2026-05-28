@@ -164,13 +164,9 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         }
     }
 
-    let (ctx_before, ctx_after) = match (cli.before_context, cli.after_context, cli.context) {
-        (b, a, _) if b > 0 || a > 0 => (b, a),
-        (_, _, c) => (c, c),
-    };
     let ctx = ContextOptions {
-        before: ctx_before,
-        after: ctx_after,
+        before: cli.before_context.max(cli.context),
+        after: cli.after_context.max(cli.context),
     };
 
     // Pattern: positional `pattern` + any number of `-e` flags. Combine as alternation.
