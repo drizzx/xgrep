@@ -73,30 +73,45 @@ pub fn read_cells<'a>(
     let mut zip_index = ZipIndex::open(path)?;
 
     let want_fast_path = !opts.disable_fast_path && opts.pattern.is_some();
-    let (_sst_size, hit_set, aborted) = if want_fast_path {
+
+    // Open calamine workbook first to get sheet count for the pre-check.
+    // calamine's open_workbook is metadata-only (does not parse sheet content
+    // until worksheet_range/worksheet_formula is called), so this is cheap.
+    let mut workbook: Xlsx<_> = open_workbook(path).map_err(map_calamine_err)?;
+    let sheets = workbook.sheets_metadata().to_vec();
+
+    // Workbook-shape pre-check (v0.2.2): when the compressed sst is large
+    // AND the workbook has few sheets, predict that should_dense_bypass would
+    // inevitably fire after sst::parse — skip sst::parse entirely and route
+    // straight to calamine. Note: this can mis-fire on a workbook where the
+    // pattern matches only a few sst entries (in which case fast-path could
+    // have saved some sheets); the trade-off is documented in the v0.2.2 spec.
+    let compressed_sst_bytes = zip_index
+        .compressed_size_of("xl/sharedStrings.xml")
+        .unwrap_or(0);
+    let preskip_sst = want_fast_path
+        && fast_path::should_skip_sst_parse(compressed_sst_bytes, sheets.len());
+
+    let (_sst_size, hit_set, aborted) = if want_fast_path && !preskip_sst {
         sst::parse_with_early_abort(&mut zip_index, opts.pattern, fast_path::THRESHOLD)?
     } else {
         (0usize, sst::HitSet::new(0), false)
     };
-    // When aborted, sst parsing stopped early to cap cost. The hit_set is
-    // truncated and unsafe to use for fast-path skip decisions, so we bypass
-    // fast-path entirely (augmented = None) and parse all sheets the v0.1 way.
-    //
-    // When the hit set is dense, every sheet almost certainly references at
-    // least one matching index — the per-sheet decide() scan would return
-    // true for every sheet, making it pure overhead. Bypass fast-path in that
-    // case too (see fast_path::should_dense_bypass).
+
+    // Reasons fast-path's per-sheet scan is skipped (any one of these):
+    //   - !want_fast_path : caller forced full v0.1 path
+    //   - aborted         : sst::parse stopped early; hit_set is truncated/unsafe
+    //   - preskip_sst     : workbook shape predicted dense_bypass; sst::parse skipped
+    //   - dense_bypass    : hit set was dense after sst::parse (downgrade path)
     let dense_bypass = want_fast_path
         && !aborted
+        && !preskip_sst
         && fast_path::should_dense_bypass(hit_set.count(), hit_set.len());
-    let augmented = if want_fast_path && !aborted && !dense_bypass {
+    let augmented = if want_fast_path && !aborted && !preskip_sst && !dense_bypass {
         Some(fast_path::augment(opts.pattern.unwrap(), &hit_set))
     } else {
         None
     };
-
-    let mut workbook: Xlsx<_> = open_workbook(path).map_err(map_calamine_err)?;
-    let sheets = workbook.sheets_metadata().to_vec();
     let mut out = Vec::new();
 
     let path_lookup: HashMap<String, String> = zip_index
