@@ -46,6 +46,10 @@ criterion = "0.5"
 name = "search"
 harness = false
 
+[[bench]]
+name = "sst_parse"
+harness = false
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
