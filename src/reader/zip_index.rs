@@ -72,6 +72,15 @@ impl ZipIndex {
             Err(e) => Err(SearchError::Parse(format!("zip entry {entry}: {e}"))),
         }
     }
+
+    /// Return the compressed size (in bytes) of a named zip entry from its
+    /// central-directory metadata. Returns `None` if the entry does not
+    /// exist. Cheap — no decompression, no entry body read; just a metadata
+    /// lookup. Used by `fast_path::should_skip_sst_parse` to decide whether
+    /// to pre-skip sst::parse before paying its cost.
+    pub fn compressed_size_of(&mut self, entry: &str) -> Option<u64> {
+        self.archive.by_name(entry).ok().map(|f| f.compressed_size())
+    }
 }
 
 fn parse_sheets(archive: &mut ZipArchive<File>) -> Result<Vec<SheetEntry>, SearchError> {
@@ -164,5 +173,26 @@ mod tests {
             .read_to_string("xl/no-such-entry.xml")
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn compressed_size_of_returns_some_for_existing_entry() {
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().join("tiny.xlsx");
+        tiny_workbook(&p);
+        let mut idx = ZipIndex::open(&p).unwrap();
+        // workbook.xml is guaranteed to exist in any xlsx.
+        let size = idx.compressed_size_of("xl/workbook.xml");
+        assert!(size.is_some(), "expected Some for existing entry");
+        assert!(size.unwrap() > 0, "compressed size should be positive");
+    }
+
+    #[test]
+    fn compressed_size_of_returns_none_for_missing_entry() {
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().join("tiny.xlsx");
+        tiny_workbook(&p);
+        let mut idx = ZipIndex::open(&p).unwrap();
+        assert_eq!(idx.compressed_size_of("xl/no-such-entry.xml"), None);
     }
 }
