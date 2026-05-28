@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::ExitCode as StdExit;
 
 use clap::Parser;
+use encoding_rs::Encoding;
 use globset::Glob;
 
 use xgrep::config::{ColorChoice, LayerSet, OutputMode};
@@ -10,7 +11,6 @@ use xgrep::error::ExitCode;
 use xgrep::matcher::{CaseMode, Pattern};
 use xgrep::printer::print_block;
 use xgrep::reader::ReaderOptions;
-use encoding_rs::Encoding;
 use xgrep::walker::walk_supported;
 use xgrep::worker::run_search;
 use xgrep::MatchEvent;
@@ -184,7 +184,7 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         sheet_filter: sheet_glob.as_ref().map(|g| g.compile_matcher()),
         pattern: None,
         disable_fast_path,
-        encoding: cli.encoding.clone(),
+        encoding: cli.encoding,
     };
     let threads = if cli.threads == 0 {
         num_cpus().max(1)
