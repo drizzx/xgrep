@@ -113,7 +113,7 @@ fn print_pretty(
                 MatchEvent::Error { message, .. } => {
                     writeln!(out, "  ERROR: {message}")?;
                 }
-                MatchEvent::Context { sheet, cell, text, .. } => {
+                MatchEvent::Context { sheet, cell, layer, text, .. } => {
                     write!(out, "  ")?;
                     if !sheet.is_empty() {
                         out.set_color(&sheet_spec)?;
@@ -128,6 +128,12 @@ fn print_pretty(
                     out.set_color(&tag_spec)?;
                     write!(out, "[context]")?;
                     out.reset()?;
+                    if layer != "display" || force_layer_tag {
+                        write!(out, " ")?;
+                        out.set_color(&tag_spec)?;
+                        write!(out, "[{}]", layer)?;
+                        out.reset()?;
+                    }
                     writeln!(out)?;
                 }
                 MatchEvent::Separator => {

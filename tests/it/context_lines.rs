@@ -9,9 +9,11 @@ use std::process::Command;
 use rust_xlsxwriter::Workbook;
 use tempfile::TempDir;
 
+use xgrep::config::{ColorChoice, OutputMode};
 use xgrep::matcher::{CaseMode, Pattern};
+use xgrep::printer::print_block;
 use xgrep::reader::ReaderOptions;
-use xgrep::{search_file, ContextOptions, MatchEvent};
+use xgrep::{search_file, ContextOptions, FileBlock, MatchEvent, Submatch, SubmatchText};
 
 fn write_bytes(path: &Path, bytes: &[u8]) {
     let mut f = fs::File::create(path).unwrap();
@@ -128,6 +130,57 @@ fn json_event_shapes_for_context_and_separator() {
     );
     assert!(json.contains(r#""cell":"A3""#));
     assert!(json.contains(r#""text":"row3""#));
+}
+
+#[test]
+fn printer_context_surfaces_non_display_layer_tag() {
+    use std::path::PathBuf;
+    let block = FileBlock {
+        events: vec![
+            MatchEvent::FileBegin { path: PathBuf::from("x.xlsx") },
+            MatchEvent::Match {
+                path: PathBuf::from("x.xlsx"),
+                sheet: "S1".to_string(),
+                cell: "A2".to_string(),
+                layer: "display".to_string(),
+                text: "TARGET".to_string(),
+                submatches: vec![Submatch {
+                    matched: SubmatchText { text: "TARGET".to_string() },
+                    start: 0,
+                    end: 6,
+                }],
+            },
+            MatchEvent::Context {
+                path: PathBuf::from("x.xlsx"),
+                sheet: "S1".to_string(),
+                cell: "A3".to_string(),
+                layer: "formula".to_string(),
+                text: "=SUM(B1:B2)".to_string(),
+            },
+            MatchEvent::Context {
+                path: PathBuf::from("x.xlsx"),
+                sheet: "S1".to_string(),
+                cell: "A4".to_string(),
+                layer: "display".to_string(),
+                text: "plain".to_string(),
+            },
+        ],
+    };
+    let mut buf: Vec<u8> = Vec::new();
+    print_block(&block, &mut buf, OutputMode::Pretty, ColorChoice::Never, false).unwrap();
+    let out = String::from_utf8(buf).unwrap();
+    assert!(
+        out.contains("=SUM(B1:B2) [context] [formula]"),
+        "expected formula context row to carry both [context] and [formula] tags; got:\n{out}"
+    );
+    assert!(
+        out.contains("plain [context]\n"),
+        "display-layer context row must NOT carry a [layer] tag; got:\n{out}"
+    );
+    assert!(
+        !out.contains("plain [context] [display]"),
+        "display layer should be hidden by default; got:\n{out}"
+    );
 }
 
 // ---- CLI validation tests ----
