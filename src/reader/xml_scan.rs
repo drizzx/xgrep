@@ -33,8 +33,28 @@ pub fn for_each_tag(
 /// double-quoted form is recognized (matches existing regex behavior).
 /// `name` must be preceded by start-of-input or whitespace so that
 /// `attr(b"name_full=\"x\"", "name")` does NOT return `Some`.
-pub fn attr<'a>(_attrs: &'a [u8], _name: &str) -> Option<&'a [u8]> {
-    unimplemented!("Task 3")
+pub fn attr<'a>(attrs: &'a [u8], name: &str) -> Option<&'a [u8]> {
+    let name_bytes = name.as_bytes();
+    // Build needle: `name=\"`. Caller verifies prefix is at start or after whitespace.
+    let mut i = 0;
+    while i + name_bytes.len() + 2 <= attrs.len() {
+        let prefix_ok = i == 0 || matches!(attrs[i - 1], b' ' | b'\t' | b'\n' | b'\r');
+        if prefix_ok
+            && attrs[i..i + name_bytes.len()] == *name_bytes
+            && attrs.get(i + name_bytes.len()) == Some(&b'=')
+            && attrs.get(i + name_bytes.len() + 1) == Some(&b'"')
+        {
+            let value_start = i + name_bytes.len() + 2;
+            // Find closing quote.
+            let value_end = attrs[value_start..]
+                .iter()
+                .position(|&b| b == b'"')
+                .map(|p| value_start + p)?;
+            return Some(&attrs[value_start..value_end]);
+        }
+        i += 1;
+    }
+    None
 }
 
 /// XML entity unescape. Recognizes exactly `&amp;`, `&lt;`, `&gt;`, `&quot;`,
@@ -117,5 +137,48 @@ mod tests {
         // A `&` not followed by a recognized entity stays as `&`.
         assert_eq!(xml_unescape(b"a & b"), "a & b");
         assert_eq!(xml_unescape(b"&"), "&");
+    }
+
+    #[test]
+    fn attr_finds_value_by_name() {
+        assert_eq!(attr(b"x=\"1\" y=\"2\"", "x"), Some(&b"1"[..]));
+        assert_eq!(attr(b"x=\"1\" y=\"2\"", "y"), Some(&b"2"[..]));
+    }
+
+    #[test]
+    fn attr_returns_none_when_absent() {
+        assert_eq!(attr(b"x=\"1\"", "z"), None);
+        assert_eq!(attr(b"", "x"), None);
+    }
+
+    #[test]
+    fn attr_does_not_match_substring_of_another_attr_name() {
+        // "name" is a substring of "name_full"; must not match.
+        assert_eq!(attr(b"name_full=\"a\"", "name"), None);
+        // But should still find a real "name" attr alongside.
+        assert_eq!(
+            attr(b"name_full=\"a\" name=\"b\"", "name"),
+            Some(&b"b"[..])
+        );
+    }
+
+    #[test]
+    fn attr_handles_leading_whitespace_before_attribute() {
+        assert_eq!(attr(b"  x=\"1\"", "x"), Some(&b"1"[..]));
+    }
+
+    #[test]
+    fn attr_value_may_contain_special_chars_except_double_quote() {
+        // Real-world: ref="A1", Target="../sharedStrings.xml"
+        assert_eq!(
+            attr(b"Target=\"../sharedStrings.xml\"", "Target"),
+            Some(&b"../sharedStrings.xml"[..])
+        );
+    }
+
+    #[test]
+    fn attr_returns_none_on_malformed_attribute() {
+        // No closing quote — function should not panic.
+        assert_eq!(attr(b"x=\"unterminated", "x"), None);
     }
 }
