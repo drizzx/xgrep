@@ -129,17 +129,16 @@ fn anchored_pattern_handled_conservatively() {
 }
 
 #[test]
-fn preskip_sst_falls_back_safely_when_pattern_is_rare() {
-    // Constructs a workbook with the SHAPE that triggers preskip
-    // (large compressed sst, 3 sheets) but with a pattern that
-    // matches only a single sst entry. The preskip path skips sst::parse
-    // and routes through calamine; the disable_fast_path path also routes
-    // through calamine. Both must yield the SAME match set — preskip must
-    // not produce false negatives.
+fn fast_path_matches_baseline_on_sparse_large_sst() {
+    // Oracle equivalence on a large-compressed-sst workbook with only a
+    // single matching sst entry. Both fast-path-on (sst::parse → augmented
+    // regex skips sheets without the hit reference) and fast-path-off
+    // (full calamine parse) must yield the SAME match set — fast-path
+    // must not produce false negatives on the sparse-hit + large-sst shape.
     use xgrep::reader::{read_cells, ReaderOptions};
 
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("preskip_sparse.xlsx");
+    let path = dir.path().join("sparse_large_sst.xlsx");
 
     // Build a workbook with a large sst (> 100KB compressed) and 3 sheets.
     // We achieve this by writing ~24,000 distinct strings across 3 sheets.
@@ -148,7 +147,7 @@ fn preskip_sst_falls_back_safely_when_pattern_is_rare() {
     let sheet_count = 3usize;
     let per_sheet_rows = 8_000usize;
     for sheet_idx in 0..sheet_count {
-        let s = wb.add_worksheet().set_name(&format!("Sheet{}", sheet_idx + 1)).unwrap();
+        let s = wb.add_worksheet().set_name(format!("Sheet{}", sheet_idx + 1)).unwrap();
         for row in 0..per_sheet_rows {
             // Unique string per cell, only one match in total.
             let value = if sheet_idx == 1 && row == 4242 {

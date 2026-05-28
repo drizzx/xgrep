@@ -76,8 +76,9 @@ impl ZipIndex {
     /// Return the compressed size (in bytes) of a named zip entry from its
     /// central-directory metadata. Returns `None` if the entry does not
     /// exist. Cheap — no decompression, no entry body read; just a metadata
-    /// lookup. Used by `fast_path::should_skip_sst_parse` to decide whether
-    /// to pre-skip sst::parse before paying its cost.
+    /// lookup. Reserved for a future hit-density-aware preskip in v0.3;
+    /// has no caller in v0.2.2 (the v0.2.2 shape-based preskip attempt
+    /// was reverted — see docs/superpowers/perf/v0.2-bench-report.md).
     pub fn compressed_size_of(&mut self, entry: &str) -> Option<u64> {
         self.archive.by_name(entry).ok().map(|f| f.compressed_size())
     }
