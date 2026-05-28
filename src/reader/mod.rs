@@ -4,6 +4,7 @@
 
 pub mod cells;
 pub mod comments;
+pub mod csv;
 pub mod fast_path;
 pub mod hidden;
 #[cfg(debug_assertions)]
