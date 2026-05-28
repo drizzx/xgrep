@@ -83,6 +83,66 @@ pub fn for_each_tag(
     false
 }
 
+/// Visit each self-closing `<TAG[attrs]/>` element in `xml`. For each match
+/// invokes `visit(attrs)`. `attrs` is the byte slice between `<TAG` and `/>`.
+///
+/// Returns `true` iff `visit` returned `ControlFlow::Break(())`.
+///
+/// This is the dual of `for_each_tag` for the `<TAG ... />` form (no body).
+/// The same tag-boundary rule applies: `<TAG` must be followed by whitespace,
+/// `>`, or `/`.
+pub(crate) fn for_each_self_closing_tag(
+    xml: &[u8],
+    tag: &str,
+    mut visit: impl FnMut(&[u8]) -> ControlFlow<()>,
+) -> bool {
+    let tag_bytes = tag.as_bytes();
+    let mut pos = 0;
+    while pos < xml.len() {
+        let lt = match memchr(b'<', &xml[pos..]) {
+            Some(off) => pos + off,
+            None => return false,
+        };
+        let after_lt = lt + 1;
+        if after_lt + tag_bytes.len() > xml.len() {
+            return false;
+        }
+        if &xml[after_lt..after_lt + tag_bytes.len()] != tag_bytes {
+            pos = lt + 1;
+            continue;
+        }
+        let boundary_idx = after_lt + tag_bytes.len();
+        let boundary = xml.get(boundary_idx).copied();
+        let is_boundary = matches!(
+            boundary,
+            Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') | Some(b'>') | Some(b'/')
+        );
+        if !is_boundary {
+            pos = lt + 1;
+            continue;
+        }
+        // Find the `>` ending the tag.
+        let gt_rel = match memchr(b'>', &xml[boundary_idx..]) {
+            Some(off) => off,
+            None => return false,
+        };
+        let gt = boundary_idx + gt_rel;
+        // Must be self-closing: byte before `>` must be `/`.
+        if gt == 0 || xml[gt - 1] != b'/' {
+            pos = gt + 1;
+            continue;
+        }
+        // attrs slice is between boundary_idx and the `/` before `>`.
+        let attrs = &xml[boundary_idx..gt - 1];
+        match visit(attrs) {
+            ControlFlow::Break(()) => return true,
+            ControlFlow::Continue(()) => {}
+        }
+        pos = gt + 1;
+    }
+    false
+}
+
 fn closing_marker(tag: &str) -> Vec<u8> {
     let mut v = Vec::with_capacity(3 + tag.len());
     v.extend_from_slice(b"</");
