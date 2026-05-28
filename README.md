@@ -1,6 +1,6 @@
 # xgrep
 
-Excel-aware grep — search `.xlsx` files with [ripgrep](https://github.com/BurntSushi/ripgrep)-style UX.
+Excel-aware grep — search `.xlsx`, `.csv`, and `.tsv` files with [ripgrep](https://github.com/BurntSushi/ripgrep)-style UX.
 
 ```text
 $ xgrep '张三' reports/
@@ -42,6 +42,10 @@ xgrep PATTERN [PATH...]
 | `--color auto\|always\|never` | color control |
 | `--glob 'PATTERN'` | filter file paths |
 | `-j N` | threads |
+| `-A N` / `--after-context N` | show N rows after each match (xlsx: same sheet) |
+| `-B N` / `--before-context N` | show N rows before each match |
+| `-C N` / `--context N` | shorthand for `-A N -B N` |
+| `-E ENC` / `--encoding ENC` | CSV/TSV decoding override (e.g. `gbk`, `utf-16le`); xlsx ignores |
 
 ## Excel-specific flags
 
@@ -54,6 +58,48 @@ xgrep PATTERN [PATH...]
 | `--layers` | always print the layer tag (even `[display]`) |
 
 By default, xgrep searches: cell **display values** + cached **formula results** + **comments** on hidden and visible content.
+
+## CSV / TSV
+
+xgrep auto-walks `.csv` (comma) and `.tsv` (tab) alongside `.xlsx`. CSV cells use A1 addresses just like xlsx, but the `Sheet!` prefix is suppressed (CSV has no sheet concept):
+
+```
+$ xgrep TARGET data.csv
+data.csv
+  A2:1: TARGET
+  B5:3: my TARGET row
+```
+
+Encoding defaults to UTF-8 with BOM auto-detect (covers Excel-exported CSV on Windows). Override with `-E`:
+
+```bash
+xgrep '错误码' --encoding gbk logs.csv
+xgrep header --encoding utf-16le exported.csv
+```
+
+Valid encoding labels follow the [WHATWG spec](https://encoding.spec.whatwg.org/) — unknown labels exit with code 2 before any file is opened. CSV parsing follows RFC 4180 quoting (`"foo,bar",baz` is two fields, not three).
+
+## Context lines
+
+rg-aligned `-A` / `-B` / `-C` show N rows around each match:
+
+```
+$ xgrep TARGET -C 1 data.csv
+data.csv
+  A1: row1 [context]
+  A2:1: TARGET
+  A3: row3 [context]
+  --
+  A7: row7 [context]
+  A8:1: TARGET
+  A9: row9 [context]
+```
+
+- For xlsx, "rows" means the matched cell's sheet rows; context never crosses sheets (`--` is inserted at sheet boundaries).
+- For CSV/TSV, "rows" means file lines.
+- Disjoint context spans within the same sheet/file are separated by `--`.
+- `--count` (`-c`) reports match count, not output-line count — context lines do not inflate the count.
+- `--json` adds `{"type":"context",...}` and `{"type":"separator","data":null}` events; existing events are unchanged.
 
 ## Output format
 
@@ -102,11 +148,10 @@ Per-file errors (encrypted/corrupt xlsx, permission denied) are reported on stde
 
 ## Known limitations
 
-- Only `.xlsx` (no `.xls`, `.xlsb`, `.ods`, `.csv`). Reader is trait-ready for future formats.
+- Only `.xlsx`, `.csv`, `.tsv` (no `.xls`, `.xlsb`, `.ods` — deferred to v0.4).
 - No encrypted-xlsx decryption: encrypted files are reported and skipped.
 - Custom number formats not understood by calamine fall back to the raw numeric value.
 - Stream-friendly large-file mode (>500 MB) is not yet implemented; xlsx files are loaded into memory.
-- No context lines (`-A` / `-B` / `-C`) — semantics for "cell context" deferred to v0.2.
 - No stdin input — xlsx requires random access.
 
 ## License
