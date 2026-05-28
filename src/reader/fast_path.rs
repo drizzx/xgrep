@@ -43,6 +43,28 @@ pub fn should_dense_bypass(hit_count: usize, sst_len: usize) -> bool {
         || hit_count * BYPASS_DENSITY_DENOMINATOR > sst_len * BYPASS_DENSITY_NUMERATOR
 }
 
+/// Constants for the workbook-shape pre-check. When the workbook shape
+/// indicates that `should_dense_bypass` will almost certainly trigger
+/// (large compressed sst + few sheets), skip sst::parse entirely — the
+/// bypass decision can be inferred from the workbook shape without
+/// running the pattern.
+///
+/// SPECULATIVE shortcut: if the heuristic mis-fires on a workbook with
+/// rare matches, we lose the fast-path opportunity to skip non-matching
+/// sheets. The thresholds trade (cost saved on typical large-sst workbooks)
+/// vs (cost paid on outlier sparse-pattern large-sst workbooks).
+pub const PRESKIP_SST_COMPRESSED_BYTES: u64 = 100_000;
+pub const PRESKIP_SST_MAX_SHEETS: usize = 5;
+
+/// Returns true if the workbook shape — measured by `compressed_sst_bytes`
+/// (the zip-entry compressed size of `xl/sharedStrings.xml`, 0 if absent)
+/// and `sheet_count` — predicts that running `sst::parse_with_early_abort`
+/// would be wasted work because dense_bypass would inevitably trigger.
+pub fn should_skip_sst_parse(compressed_sst_bytes: u64, sheet_count: usize) -> bool {
+    compressed_sst_bytes > PRESKIP_SST_COMPRESSED_BYTES
+        && sheet_count <= PRESKIP_SST_MAX_SHEETS
+}
+
 /// Build an augmented regex from (user pattern, sst hit_set). Returns None
 /// when the user pattern alone is the right scanner (hit_set empty), or when
 /// augmentation would exceed THRESHOLD and we therefore can't make a
@@ -290,5 +312,45 @@ mod tests {
         assert!(!should_dense_bypass(5, 100));
         // 6 / 100 = 6%, IS a bypass.
         assert!(should_dense_bypass(6, 100));
+    }
+
+    #[test]
+    fn should_skip_sst_parse_large_sst_few_sheets_returns_true() {
+        // sst_heavy_low_hit fixture shape: ~5MB SST compressed to ~500KB, 3 sheets
+        assert!(should_skip_sst_parse(500_000, 3));
+    }
+
+    #[test]
+    fn should_skip_sst_parse_large_sst_many_sheets_returns_false() {
+        // 100 sheets disqualifies — fast-path's per-sheet scan worth the cost
+        assert!(!should_skip_sst_parse(500_000, 100));
+    }
+
+    #[test]
+    fn should_skip_sst_parse_small_sst_few_sheets_returns_false() {
+        // many_small fixture shape: tiny SST per file, few sheets per file
+        // density-based dense_bypass still applies; pre-check does not.
+        assert!(!should_skip_sst_parse(5_000, 3));
+    }
+
+    #[test]
+    fn should_skip_sst_parse_at_compressed_boundary() {
+        // Boundary uses strict > on compressed size:
+        // exactly 100_000 → false; 100_001 → true.
+        assert!(!should_skip_sst_parse(100_000, 3));
+        assert!(should_skip_sst_parse(100_001, 3));
+    }
+
+    #[test]
+    fn should_skip_sst_parse_at_sheets_boundary() {
+        // Boundary uses <= on sheets: 5 → true, 6 → false.
+        assert!(should_skip_sst_parse(200_000, 5));
+        assert!(!should_skip_sst_parse(200_000, 6));
+    }
+
+    #[test]
+    fn should_skip_sst_parse_zero_sst_returns_false() {
+        // No sharedStrings.xml at all → no shortcut.
+        assert!(!should_skip_sst_parse(0, 3));
     }
 }
