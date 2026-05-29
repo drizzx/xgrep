@@ -99,8 +99,17 @@ fn read_xlsx_cells<'a>(
     let mut zip_index = ZipIndex::open(path)?;
 
     let want_fast_path = !opts.disable_fast_path && opts.pattern.is_some();
+    // Abort the sst scan as soon as the hit count exceeds BYPASS_ABS_THRESHOLD:
+    // beyond that point `should_dense_bypass` already forces `augmented = None`
+    // (full parse of every sheet), so scanning further sst entries is pure waste
+    // — the truncated hit_set is discarded either way. This is behavior-identical
+    // to the old THRESHOLD(=100) abort: the "fast-path active" set is exactly
+    // {count <= BYPASS_ABS_THRESHOLD AND density <= 5%} under either value, since
+    // dense-bypass disables the fast-path for any higher count. It just stops the
+    // wasted scan ~3x sooner (recovering the dense-bypass regression noted in
+    // docs/superpowers/perf/v0.2-bench-report.md).
     let (_sst_size, hit_set, aborted) = if want_fast_path {
-        sst::parse_with_early_abort(&mut zip_index, opts.pattern, fast_path::THRESHOLD)?
+        sst::parse_with_early_abort(&mut zip_index, opts.pattern, fast_path::BYPASS_ABS_THRESHOLD)?
     } else {
         (0usize, sst::HitSet::new(0), false)
     };

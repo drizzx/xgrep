@@ -27,11 +27,16 @@ pub fn for_each_tag(
     mut visit: impl FnMut(&[u8], &[u8]) -> ControlFlow<()>,
 ) -> bool {
     let tag_bytes = tag.as_bytes();
-    let open_close = closing_marker(tag);
+    let mut marker_buf = [0u8; CLOSING_MARKER_CAP];
+    let open_close = write_closing_marker(tag, &mut marker_buf);
+    // Build the substring searcher once and reuse it across every `<si>`/`<t>`
+    // body — hoisting it out of the loop avoids re-priming the SIMD scanner per
+    // element and keeps the inner loop allocation-free.
+    let close_finder = memchr::memmem::Finder::new(open_close);
     let mut pos = 0;
     while pos < xml.len() {
         // Find the next `<` from `pos`.
-        let lt = match memchr(b'<', &xml[pos..]) {
+        let lt = match memchr::memchr(b'<', &xml[pos..]) {
             Some(off) => pos + off,
             None => return false,
         };
@@ -55,7 +60,7 @@ pub fn for_each_tag(
             continue;
         }
         // Find the `>` ending the open tag.
-        let gt_rel = match memchr(b'>', &xml[boundary_idx..]) {
+        let gt_rel = match memchr::memchr(b'>', &xml[boundary_idx..]) {
             Some(off) => off,
             None => return false,
         };
@@ -69,7 +74,7 @@ pub fn for_each_tag(
         let attrs = &xml[boundary_idx..gt];
         let body_start = gt + 1;
         // Find the first `</tag>` after body_start.
-        let close = match find_subslice(&xml[body_start..], &open_close) {
+        let close = match close_finder.find(&xml[body_start..]) {
             Some(off) => body_start + off,
             None => return false,
         };
@@ -99,7 +104,7 @@ pub(crate) fn for_each_self_closing_tag(
     let tag_bytes = tag.as_bytes();
     let mut pos = 0;
     while pos < xml.len() {
-        let lt = match memchr(b'<', &xml[pos..]) {
+        let lt = match memchr::memchr(b'<', &xml[pos..]) {
             Some(off) => pos + off,
             None => return false,
         };
@@ -122,7 +127,7 @@ pub(crate) fn for_each_self_closing_tag(
             continue;
         }
         // Find the `>` ending the tag.
-        let gt_rel = match memchr(b'>', &xml[boundary_idx..]) {
+        let gt_rel = match memchr::memchr(b'>', &xml[boundary_idx..]) {
             Some(off) => off,
             None => return false,
         };
@@ -143,24 +148,27 @@ pub(crate) fn for_each_self_closing_tag(
     false
 }
 
-fn closing_marker(tag: &str) -> Vec<u8> {
-    let mut v = Vec::with_capacity(3 + tag.len());
-    v.extend_from_slice(b"</");
-    v.extend_from_slice(tag.as_bytes());
-    v.push(b'>');
-    v
-}
+/// Upper bound for the stack buffer that holds a `</tag>` closing marker. The
+/// longest tag this scanner is invoked with is "Relationship" (`</Relationship>`
+/// = 15 bytes), so 16 leaves a byte of headroom. `write_closing_marker`
+/// debug-asserts the marker fits.
+const CLOSING_MARKER_CAP: usize = 16;
 
-fn memchr(needle: u8, hay: &[u8]) -> Option<usize> {
-    hay.iter().position(|&b| b == needle)
-}
-
-fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || needle.len() > hay.len() {
-        return None;
-    }
-    let last = hay.len() - needle.len();
-    (0..=last).find(|&i| &hay[i..i + needle.len()] == needle)
+/// Write `</tag>` into `buf` and return the filled prefix slice. Avoids the
+/// per-`for_each_tag` heap allocation the old `closing_marker(tag) -> Vec<u8>`
+/// incurred (one alloc per `<si>`/`<t>` scan over a large sharedStrings).
+fn write_closing_marker<'b>(tag: &str, buf: &'b mut [u8]) -> &'b [u8] {
+    let tag_bytes = tag.as_bytes();
+    let n = tag_bytes.len() + 3; // "</" + tag + ">"
+    debug_assert!(
+        n <= buf.len(),
+        "closing-marker buffer too small for </{tag}>"
+    );
+    buf[0] = b'<';
+    buf[1] = b'/';
+    buf[2..2 + tag_bytes.len()].copy_from_slice(tag_bytes);
+    buf[2 + tag_bytes.len()] = b'>';
+    &buf[..n]
 }
 
 /// Return the unquoted value of `name="..."` from an attrs slice. Only

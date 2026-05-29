@@ -1,13 +1,10 @@
 //! Error types and the rg-aligned process exit code mapping.
 
 use std::io;
-use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SearchError {
-    #[error("could not open file: {0}")]
-    Open(#[source] io::Error),
     #[error("xlsx parse error: {0}")]
     Parse(String),
     #[error("sheet {sheet:?}: {msg}")]
@@ -16,12 +13,6 @@ pub enum SearchError {
     Encrypted,
     #[error("io error: {0}")]
     Io(#[from] io::Error),
-}
-
-#[derive(Debug)]
-pub struct ErrorReport {
-    pub path: PathBuf,
-    pub err: SearchError,
 }
 
 /// rg-aligned process exit code.

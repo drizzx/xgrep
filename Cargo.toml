@@ -23,6 +23,7 @@ calamine = { version = "0.26", features = ["dates"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 regex = "1.10"
+memchr = "2"
 ignore = "0.4"
 termcolor = "1.4"
 clap = { version = "4", features = ["derive"] }

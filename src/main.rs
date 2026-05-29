@@ -251,17 +251,23 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         OutputMode::Pretty
     };
 
+    let stdout_is_tty = io::stdout().is_terminal();
     let color_choice: ColorChoice = cli.color.into();
     let effective_color = match color_choice {
-        ColorChoice::Auto if io::stdout().is_terminal() => ColorChoice::Always,
+        ColorChoice::Auto if stdout_is_tty => ColorChoice::Always,
         ColorChoice::Auto => ColorChoice::Never,
         c => c,
     };
 
     let mut total_matches = 0u64;
     let mut had_error = false;
+    // Buffer stdout: a raw StdoutLock is line-buffered, so without this every
+    // output line costs a syscall. A 64 KiB BufWriter collapses bulk output
+    // (large result sets piped to a file/process) into chunked writes; it is
+    // transparent to termcolor and serde. On a terminal we flush per file block
+    // so results still appear incrementally rather than only at the final flush.
     let stdout = io::stdout();
-    let mut out = stdout.lock();
+    let mut out = io::BufWriter::with_capacity(64 * 1024, stdout.lock());
     for block in &blocks {
         for ev in &block.events {
             match ev {
@@ -278,6 +284,14 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
                 return Ok(ExitCode::Match);
             }
             return Err(e.into());
+        }
+        if stdout_is_tty {
+            if let Err(e) = out.flush() {
+                if e.kind() == io::ErrorKind::BrokenPipe {
+                    return Ok(ExitCode::Match);
+                }
+                return Err(e.into());
+            }
         }
     }
     let _ = out.flush();

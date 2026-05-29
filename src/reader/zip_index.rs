@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use zip::ZipArchive;
 
@@ -20,7 +20,6 @@ pub struct SheetEntry {
 
 pub struct ZipIndex {
     archive: ZipArchive<File>,
-    path: PathBuf,
     sheets: Vec<SheetEntry>,
 }
 
@@ -30,16 +29,9 @@ impl ZipIndex {
         let mut archive =
             ZipArchive::new(file).map_err(|e| SearchError::Parse(format!("zip: {e}")))?;
         let sheets = parse_sheets(&mut archive)?;
-        Ok(Self {
-            archive,
-            path: path.to_path_buf(),
-            sheets,
-        })
+        Ok(Self { archive, sheets })
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
     pub fn sheets(&self) -> &[SheetEntry] {
         &self.sheets
     }
@@ -71,16 +63,6 @@ impl ZipIndex {
             Err(zip::result::ZipError::FileNotFound) => Ok(None),
             Err(e) => Err(SearchError::Parse(format!("zip entry {entry}: {e}"))),
         }
-    }
-
-    /// Return the compressed size (in bytes) of a named zip entry from its
-    /// central-directory metadata. Returns `None` if the entry does not
-    /// exist. Cheap — no decompression, no entry body read; just a metadata
-    /// lookup. Reserved for a future hit-density-aware preskip in v0.3;
-    /// has no caller in v0.2.2 (the v0.2.2 shape-based preskip attempt
-    /// was reverted — see docs/superpowers/perf/v0.2-bench-report.md).
-    pub fn compressed_size_of(&mut self, entry: &str) -> Option<u64> {
-        self.archive.by_name(entry).ok().map(|f| f.compressed_size())
     }
 }
 
@@ -174,26 +156,5 @@ mod tests {
             .read_to_string("xl/no-such-entry.xml")
             .unwrap()
             .is_none());
-    }
-
-    #[test]
-    fn compressed_size_of_returns_some_for_existing_entry() {
-        let dir = TempDir::new().unwrap();
-        let p = dir.path().join("tiny.xlsx");
-        tiny_workbook(&p);
-        let mut idx = ZipIndex::open(&p).unwrap();
-        // workbook.xml is guaranteed to exist in any xlsx.
-        let size = idx.compressed_size_of("xl/workbook.xml");
-        assert!(size.is_some(), "expected Some for existing entry");
-        assert!(size.unwrap() > 0, "compressed size should be positive");
-    }
-
-    #[test]
-    fn compressed_size_of_returns_none_for_missing_entry() {
-        let dir = TempDir::new().unwrap();
-        let p = dir.path().join("tiny.xlsx");
-        tiny_workbook(&p);
-        let mut idx = ZipIndex::open(&p).unwrap();
-        assert_eq!(idx.compressed_size_of("xl/no-such-entry.xml"), None);
     }
 }
