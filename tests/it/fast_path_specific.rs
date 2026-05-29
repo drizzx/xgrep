@@ -96,6 +96,27 @@ fn formula_cached_value_in_sheet_xml_found_via_fast_path_b() {
 }
 
 #[test]
+fn anchored_multipattern_finds_literal_value_via_fast_path() {
+    // Regression (correctness-8): main.rs joins `-e '^42$' -e '^99$'` into
+    // `(?:^42$)|(?:^99$)`. The number 42 is stored literally as <v>42</v> in the
+    // sheet xml (NOT in sharedStrings), so the augmented byte-scan's <v>idx</v>
+    // alternatives cannot rescue it. With the embedded ^/$ surviving strip_anchors
+    // and the byte scan running multi_line(false), fast-path used to wrongly SKIP the
+    // sheet — silently dropping the match in release (panicking via the debug oracle).
+    // augment() must Bypass when anchors survive, so fast-path on and off agree.
+    let dir = TempDir::new().unwrap();
+    let p = dir.path().join("anchored_multi.xlsx");
+    let mut wb = Workbook::new();
+    let s = wb.add_worksheet().set_name("S").unwrap();
+    s.write_formula(0, 0, "=21+21").unwrap();
+    s.set_formula_result(0, 0, "42");
+    wb.save(&p).unwrap();
+    let r = matches(&p, "(?:^42$)|(?:^99$)", false);
+    assert_eq!(r, vec!["42".to_string()]);
+    assert_eq!(r, matches(&p, "(?:^42$)|(?:^99$)", true));
+}
+
+#[test]
 fn pattern_at_cell_boundary_still_found() {
     // pattern "foo bar" spans across what would be a cell boundary in pretty
     // output, but inside a single cell text the byte scan must find it.

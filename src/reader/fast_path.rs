@@ -54,6 +54,19 @@ pub fn augment(pattern: &Pattern, hit_set: &HitSet) -> AugmentResult {
     let raw = strip_anchors(pattern.raw());
     let case_insensitive = pattern.is_case_insensitive();
 
+    // Correctness guard: `strip_anchors` only peels a single OUTER `^`/`$`. For
+    // multi-pattern/-e joins like `(?:^42$)|(?:^99$)` (raw starts with `(`), the
+    // embedded anchors survive. The byte-scan regex runs with multi_line(false), so
+    // those anchors bind to the absolute start/end of the WHOLE sheet xml — `^42$`
+    // then never matches `<v>42</v>`, and decide() would wrongly SKIP a sheet that
+    // truly matches (values stored literally in sheet xml: numbers/dates/bools/cached/
+    // inline strings; SST strings are rescued by the <v>idx</v> alternatives, literals
+    // are not). Any surviving anchor makes the screen unsafe, so bail to the
+    // always-correct full-parse path.
+    if raw.contains('^') || raw.contains('$') {
+        return AugmentResult::Bypass;
+    }
+
     if hit_set.is_empty() {
         // Just the user pattern, unanchored.
         return match build(&raw, case_insensitive) {
@@ -251,6 +264,39 @@ mod tests {
         assert!(r.is_match("foo<v>"));
         assert!(r.is_match("<v>1</v>"));
         // No infinite-regex weirdness — compile must have succeeded.
+    }
+
+    #[test]
+    fn augment_anchored_multipattern_does_not_skip_matching_sheet() {
+        // Regression for the silent false-negative (correctness-8): main.rs joins
+        // `-e '^42$' -e '^99$'` into `(?:^42$)|(?:^99$)`. strip_anchors only peels the
+        // OUTER ^/$, so the embedded anchors survive into the byte-scan regex, which
+        // runs with multi_line(false) and therefore anchors to the absolute start/end
+        // of the WHOLE sheet xml. `^42$` then fails to match `<v>42</v>` even though the
+        // cell value "42" matches the user pattern — so decide() would WRONGLY skip a
+        // sheet that truly matches. The number 42 is stored literally in sheet xml (not
+        // in sharedStrings), so the injected <v>idx</v> alternatives cannot rescue it.
+        // Fix: augment must Bypass (force full parse) when anchors survive the strip.
+        let pat = p("(?:^42$)|(?:^99$)");
+        let hs = HitSet::new(0); // empty: a numeric value is NOT in the shared-string table
+        let aug = augment(&pat, &hs);
+        let xml = br#"<c r="A1"><v>42</v></c>"#; // sheet genuinely contains a matching cell value
+        assert!(
+            decide(xml, &aug, true),
+            "decide() must NOT skip a sheet whose literal cell value matches an anchored multi-pattern query"
+        );
+    }
+
+    #[test]
+    fn augment_bypasses_when_literal_dollar_survives() {
+        // Sibling of the anchored-multipattern case: a pattern like `$100` (also what
+        // `-F '$100'` yields, since Pattern::raw() keeps the UNescaped input) would have
+        // its `$` compiled by augment as a regex end-anchor ("end-of-text then 100" =
+        // matches nothing), wrongly skipping every sheet. Any surviving `$`/`^` must
+        // force Bypass to the full-parse path.
+        let pat = p("$100");
+        let hs = HitSet::new(0);
+        assert!(matches!(augment(&pat, &hs), AugmentResult::Bypass));
     }
 
     #[test]
